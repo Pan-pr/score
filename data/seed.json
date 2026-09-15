@@ -1,0 +1,166 @@
+{
+  "gpaScale": {
+    "A": 4,
+    "B+": 3.5,
+    "B": 3,
+    "C+": 2.5,
+    "C": 2,
+    "D+": 1.5,
+    "D": 1,
+    "F": 0,
+    "S": null,
+    "U": null
+  },
+  "courses": [
+    {
+      "id": "com-prog",
+      "name": "Com Prog",
+      "credit": 3,
+      "kind": "graded",
+      "items": [
+        { "id": "i1", "name": "Test 1", "score": 18.75, "full": 25 },
+        { "id": "i2", "name": "Test 2", "score": 0, "full": 25 },
+        { "id": "i3", "name": "Test 3", "score": 0, "full": 30 },
+        { "id": "i4", "name": "Project", "score": 0, "full": 10 },
+        { "id": "i5", "name": "Grader", "score": 5, "full": 5 },
+        { "id": "i6", "name": "Attendance", "score": 5, "full": 5 }
+      ],
+      "scale": [
+        { "cutoff": 0, "letter": "F" },
+        { "cutoff": 50, "letter": "D" },
+        { "cutoff": 55, "letter": "D+" },
+        { "cutoff": 60, "letter": "C" },
+        { "cutoff": 65, "letter": "C+" },
+        { "cutoff": 70, "letter": "B" },
+        { "cutoff": 75, "letter": "B+" },
+        { "cutoff": 80, "letter": "A" }
+      ]
+    },
+    {
+      "id": "physics-1",
+      "name": "Physics I",
+      "credit": 3,
+      "kind": "graded",
+      "items": [
+        { "id": "i1", "name": "Midterm", "score": 0, "full": 50 },
+        { "id": "i2", "name": "Final", "score": 0, "full": 50 }
+      ],
+      "scale": [
+        { "cutoff": 0, "letter": "F" },
+        { "cutoff": 33, "letter": "D" },
+        { "cutoff": 40, "letter": "D+" },
+        { "cutoff": 48, "letter": "C" },
+        { "cutoff": 56, "letter": "C+" },
+        { "cutoff": 64, "letter": "B" },
+        { "cutoff": 72, "letter": "B+" },
+        { "cutoff": 80, "letter": "A" }
+      ]
+    },
+    {
+      "id": "calculus-1",
+      "name": "Calculus I",
+      "credit": 3,
+      "kind": "graded",
+      "items": [
+        { "id": "i1", "name": "Midterm", "score": 0, "full": 45 },
+        { "id": "i2", "name": "Final", "score": 0, "full": 45 },
+        { "id": "i3", "name": "Quiz", "score": 8.75, "full": 10 }
+      ],
+      "scale": [
+        { "cutoff": 0, "letter": "F" },
+        { "cutoff": 30, "letter": "D" },
+        { "cutoff": 40, "letter": "D+" },
+        { "cutoff": 50, "letter": "C" },
+        { "cutoff": 60, "letter": "C+" },
+        { "cutoff": 70, "letter": "B" },
+        { "cutoff": 75, "letter": "B+" },
+        { "cutoff": 80, "letter": "A" }
+      ]
+    },
+    {
+      "id": "comm-eng",
+      "name": "Comm Eng",
+      "credit": 3,
+      "kind": "graded",
+      "items": [
+        { "id": "i1", "name": "Presentation 1", "score": 4.14, "full": 5 },
+        { "id": "i2", "name": "Presentation 2", "score": 0, "full": 5 },
+        { "id": "i3", "name": "Essay 1", "score": 0, "full": 10 },
+        { "id": "i4", "name": "Essay 2", "score": 0, "full": 10 },
+        { "id": "i5", "name": "Classwork", "score": 9.875, "full": 10 },
+        { "id": "i6", "name": "Midterm", "score": 0, "full": 25 },
+        { "id": "i7", "name": "Final", "score": 0, "full": 25 }
+      ],
+      "scale": [
+        { "cutoff": 0, "letter": "F" },
+        { "cutoff": 50, "letter": "D" },
+        { "cutoff": 55, "letter": "D+" },
+        { "cutoff": 60, "letter": "C" },
+        { "cutoff": 65, "letter": "C+" },
+        { "cutoff": 70, "letter": "B" },
+        { "cutoff": 75, "letter": "B+" },
+        { "cutoff": 80, "letter": "A" }
+      ]
+    },
+    {
+      "id": "explore",
+      "name": "Explore",
+      "credit": 3,
+      "kind": "graded",
+      "items": [
+        { "id": "i1", "name": "Group Activity", "score": 6, "full": 48 },
+        { "id": "i2", "name": "Quiz Intro to Cluster", "score": 15, "full": 16 },
+        { "id": "i3", "name": "Teamwork", "score": 1, "full": 6 },
+        { "id": "i4", "name": "Assignment", "score": 2, "full": 6 },
+        { "id": "i5", "name": "Attendance", "score": 6, "full": 24 }
+      ],
+      "scale": [
+        { "cutoff": 0, "letter": "F" },
+        { "cutoff": 50, "letter": "D" },
+        { "cutoff": 60, "letter": "D+" },
+        { "cutoff": 65, "letter": "C" },
+        { "cutoff": 70, "letter": "C+" },
+        { "cutoff": 75, "letter": "B" },
+        { "cutoff": 80, "letter": "B+" },
+        { "cutoff": 85, "letter": "A" }
+      ]
+    },
+    {
+      "id": "physics-lab",
+      "name": "Physics Lab",
+      "credit": 1,
+      "kind": "graded",
+      "items": [
+        { "id": "i1", "name": "Lab 1", "score": 7, "full": 7 },
+        { "id": "i2", "name": "Lab 2", "score": 7, "full": 7 },
+        { "id": "i3", "name": "Lab 3", "score": 7, "full": 7 },
+        { "id": "i4", "name": "Lab 4", "score": 6, "full": 7 },
+        { "id": "i5", "name": "Lab 5", "score": 6, "full": 7 },
+        { "id": "i6", "name": "Lab 6", "score": 0, "full": 7 },
+        { "id": "i7", "name": "Lab 7", "score": 0, "full": 7 },
+        { "id": "i8", "name": "Lab 8", "score": 0, "full": 7 },
+        { "id": "i9", "name": "Lab 9", "score": 0, "full": 7 },
+        { "id": "i10", "name": "Lab 10", "score": 0, "full": 7 },
+        { "id": "i11", "name": "Final", "score": 0, "full": 30 }
+      ],
+      "scale": [
+        { "cutoff": 0, "letter": "F" },
+        { "cutoff": 50, "letter": "D" },
+        { "cutoff": 60, "letter": "D+" },
+        { "cutoff": 65, "letter": "C" },
+        { "cutoff": 70, "letter": "C+" },
+        { "cutoff": 75, "letter": "B" },
+        { "cutoff": 80, "letter": "B+" },
+        { "cutoff": 85, "letter": "A" }
+      ]
+    },
+    {
+      "id": "gened",
+      "name": "Gened",
+      "credit": 3,
+      "kind": "satisfactory",
+      "items": [],
+      "scale": []
+    }
+  ]
+}
