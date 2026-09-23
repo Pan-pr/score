@@ -87,9 +87,14 @@
     var raw = null;
     try { raw = localStorage.getItem(STORAGE_KEY); } catch (e) { /* storage unavailable */ }
     if (raw) {
-      try { return JSON.parse(raw); } catch (e) { /* fall through to seed */ }
+      try { return migrate(JSON.parse(raw)); } catch (e) { /* fall through to seed */ }
     }
-    return JSON.parse(JSON.stringify(SEED_DATA));
+    return migrate(JSON.parse(JSON.stringify(SEED_DATA)));
+  }
+
+  function migrate(s) {
+    (s.courses || []).forEach(function (c) { if (!c.semester) c.semester = "Semester 1"; });
+    return s;
   }
 
   function saveState() {
@@ -164,6 +169,37 @@
     return { cgpa: cgpa, totalCredits: totalCredits, attemptedCredits: attemptedCredits };
   }
 
+  function computeBySemester() {
+    var order = [], map = {};
+    state.courses.forEach(function (c) {
+      var sem = c.semester || "Semester 1";
+      if (!map[sem]) { map[sem] = { name: sem, credits: 0, quality: 0, courses: [] }; order.push(sem); }
+      map[sem].courses.push(c);
+      var r = computeCourse(c);
+      if (r.gpaPoint !== null && !isNaN(r.gpaPoint)) {
+        map[sem].quality += r.gpaPoint * (Number(c.credit) || 0);
+        map[sem].credits += Number(c.credit) || 0;
+      }
+    });
+    return order.map(function (name) {
+      var g = map[name];
+      return { name: name, gpa: g.credits > 0 ? g.quality / g.credits : 0, courses: g.courses };
+    });
+  }
+
+  // Assumes assessment items for a course add up to 100 points total (true of every
+  // seeded course). Tells the learner what average they need on whatever's left.
+  function whatIfMessage(course, targetPercent) {
+    var r = computeCourse(course);
+    var remaining = Math.max(0, 100 - r.totalFull);
+    if (remaining <= 0) return "All items entered — final result is " + round2(r.percent) + "%.";
+    var neededScore = targetPercent - r.totalScore;
+    var neededPct = (neededScore / remaining) * 100;
+    if (neededPct <= 0) return "Already secured " + targetPercent + "%+ no matter what's left.";
+    if (neededPct > 100) return "Not reachable — the best possible is " + round2(r.totalScore + remaining) + "%.";
+    return "Needs " + neededPct.toFixed(1) + "% (" + neededScore.toFixed(1) + " of " + round2(remaining) + " pts left) to reach " + targetPercent + "%.";
+  }
+
   function letterClass(letter) {
     if (!letter) return "grade-none";
     if (letter === "S" || letter === "U") return "grade-s";
@@ -230,9 +266,22 @@
 
     var list = document.getElementById("standingList");
     list.innerHTML = "";
-    results.forEach(function (x) {
-      var row = document.createElement("div");
-      row.className = "standing-row";
+    var semesters = computeBySemester();
+    semesters.forEach(function (sem) {
+      var head = document.createElement("div");
+      head.className = "semester-header";
+      var nameSpan = document.createElement("span");
+      nameSpan.textContent = sem.name;
+      var gpaSpan = document.createElement("span");
+      gpaSpan.textContent = "GPA " + sem.gpa.toFixed(2);
+      head.appendChild(nameSpan);
+      head.appendChild(gpaSpan);
+      list.appendChild(head);
+
+      sem.courses.forEach(function (course) {
+        var x = { course: course, r: computeCourse(course) };
+        var row = document.createElement("div");
+        row.className = "standing-row";
 
       var nameWrap = document.createElement("div");
       var nameEl = document.createElement("div");
@@ -259,11 +308,12 @@
       badge.className = "badge " + letterClass(x.r.letter);
       badge.textContent = x.r.letter || "—";
 
-      row.appendChild(nameWrap);
-      row.appendChild(track);
-      row.appendChild(pct);
-      row.appendChild(badge);
-      list.appendChild(row);
+        row.appendChild(nameWrap);
+        row.appendChild(track);
+        row.appendChild(pct);
+        row.appendChild(badge);
+        list.appendChild(row);
+      });
     });
   }
 
@@ -292,6 +342,8 @@
 
       node.querySelector(".credit-input").value = course.credit;
       node.querySelector(".kind-select").value = course.kind;
+      node.querySelector(".semester-input").value = course.semester || "Semester 1";
+      node.querySelector(".whatif-result").textContent = whatIfMessage(course, Number(node.querySelector(".whatif-target").value) || 80);
 
       var itemsList = node.querySelector(".items-list");
       var itemRowTpl = document.getElementById("itemRowTemplate");
@@ -319,9 +371,18 @@
       if (course.kind === "satisfactory") {
         node.querySelector(".items-block").style.display = "none";
         node.querySelector(".scale-block").style.display = "none";
+        node.querySelector(".whatif-block").style.display = "none";
       }
 
       wrap.appendChild(node);
+    });
+
+    var datalist = document.getElementById("semesterOptions");
+    datalist.innerHTML = "";
+    var seen = {};
+    state.courses.forEach(function (c) {
+      var sem = c.semester || "Semester 1";
+      if (!seen[sem]) { seen[sem] = true; var opt = document.createElement("option"); opt.value = sem; datalist.appendChild(opt); }
     });
   }
 
@@ -430,11 +491,15 @@
       }
 
       if (e.target.closest(".delete-course-btn")) {
-        if (confirm('Remove "' + course.name + '"? This can\'t be undone.')) {
-          state.courses = state.courses.filter(function (c) { return c.id !== id; });
+        var cIdx = state.courses.indexOf(course);
+        state.courses = state.courses.filter(function (c) { return c.id !== id; });
+        saveState();
+        renderAll();
+        showToast('"' + course.name + '" removed', function () {
+          state.courses.splice(cIdx, 0, course);
           saveState();
           renderAll();
-        }
+        });
         return;
       }
 
@@ -449,10 +514,20 @@
       if (e.target.closest(".row-remove") && e.target.closest(".items-list")) {
         var itemRow = e.target.closest(".items-row");
         var itemId = itemRow.dataset.itemId;
+        var removedItem = course.items.filter(function (it) { return it.id === itemId; })[0];
+        var iIdx = course.items.indexOf(removedItem);
         course.items = course.items.filter(function (it) { return it.id !== itemId; });
         saveState();
         renderCourses();
+        renderDashboard();
         reopen(id);
+        showToast('"' + removedItem.name + '" removed', function () {
+          course.items.splice(iIdx, 0, removedItem);
+          saveState();
+          renderCourses();
+          renderDashboard();
+          reopen(id);
+        });
         return;
       }
 
@@ -493,6 +568,17 @@
         var creditNum = courseEl.querySelector(".credit-num");
         if (creditNum) creditNum.textContent = course.credit;
         renderDashboard();
+        return;
+      }
+      if (e.target.classList.contains("semester-input")) {
+        course.semester = e.target.value.trim() || "Semester 1";
+        saveState();
+        renderDashboard();
+        return;
+      }
+      if (e.target.classList.contains("whatif-target")) {
+        var target = Number(e.target.value) || 0;
+        courseEl.querySelector(".whatif-result").textContent = whatIfMessage(course, target);
         return;
       }
       if (e.target.classList.contains("item-name")) {
@@ -552,6 +638,19 @@
     });
   }
 
+  var pendingUndo = null, toastTimer2 = null;
+  function showToast(message, undoFn) {
+    pendingUndo = undoFn;
+    var toast = document.getElementById("toast");
+    toast.querySelector(".toast-msg").textContent = message;
+    toast.classList.add("is-visible");
+    clearTimeout(toastTimer2);
+    toastTimer2 = setTimeout(function () {
+      toast.classList.remove("is-visible");
+      pendingUndo = null;
+    }, 6000);
+  }
+
   function reopen(id) {
     var el = document.querySelector('.course[data-id="' + id + '"]');
     if (el) el.classList.add("is-open");
@@ -578,6 +677,9 @@
     var badge = courseEl.querySelector(".letter-badge");
     badge.textContent = r.letter || "—";
     badge.className = "badge letter-badge " + letterClass(r.letter);
+    var targetInput = courseEl.querySelector(".whatif-target");
+    var whatifOut = courseEl.querySelector(".whatif-result");
+    if (targetInput && whatifOut) whatifOut.textContent = whatIfMessage(course, Number(targetInput.value) || 80);
   }
   function updateCourseLiveBadge(courseEl, course) {
     updateCourseLiveTotals(courseEl, course);
@@ -637,5 +739,20 @@
     setupCoursesPage();
     setupSettings();
     renderAll();
+
+    document.getElementById("toastUndo").addEventListener("click", function () {
+      if (pendingUndo) { pendingUndo(); pendingUndo = null; }
+      document.getElementById("toast").classList.remove("is-visible");
+    });
+
+    document.getElementById("printBtn").addEventListener("click", function () {
+      window.print();
+    });
+
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", function () {
+        navigator.serviceWorker.register("sw.js").catch(function () {});
+      });
+    }
   });
 })();

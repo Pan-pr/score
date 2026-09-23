@@ -9,6 +9,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#171310">
 </head>
 <body data-theme="dark">
 
@@ -43,6 +45,7 @@
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M2 5h16M2 10h16M2 15h16" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
         </button>
         <h1 class="page-title" id="pageTitle">Dashboard</h1>
+        <button class="btn btn-secondary" id="printBtn">Print transcript</button>
         <div class="save-status" id="saveStatus">
           <span class="save-dot"></span>
           <span id="saveStatusText">All changes saved</span>
@@ -151,6 +154,10 @@
             <input type="number" class="credit-input" min="0" step="1">
           </label>
           <label class="field">
+            <span>Semester</span>
+            <input type="text" class="semester-input" list="semesterOptions">
+          </label>
+          <label class="field">
             <span>Type</span>
             <select class="kind-select">
               <option value="graded">Graded</option>
@@ -195,9 +202,21 @@
             <div class="scale-list"></div>
           </div>
         </div>
+        <div class="whatif-block">
+          <div class="items-head"><h3>Grade needed</h3></div>
+          <div class="whatif-row">
+            <label class="field">
+              <span>Target %</span>
+              <input type="number" class="whatif-target" value="80" min="0" max="100" step="1">
+            </label>
+            <p class="whatif-result"></p>
+          </div>
+        </div>
       </div>
     </article>
   </template>
+
+  <datalist id="semesterOptions"></datalist>
 
   <!-- Item row template -->
   <template id="itemRowTemplate">
@@ -229,6 +248,11 @@
       <input type="number" class="gpa-scale-point" step="0.1" placeholder="—">
     </label>
   </template>
+
+  <div class="toast" id="toast">
+    <span class="toast-msg"></span>
+    <button class="btn btn-ghost" id="toastUndo">Undo</button>
+  </div>
 
   <script src="js/app.js"></script>
 </body>
