@@ -100,24 +100,9 @@
   function saveState() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-      flashSaved();
     } catch (e) {
-      flashSaved(true);
+      console.warn("Ledger: couldn't save — local storage unavailable.");
     }
-  }
-
-  var saveTimer = null;
-  function flashSaved(failed) {
-    var el = document.getElementById("saveStatus");
-    var text = document.getElementById("saveStatusText");
-    if (!el) return;
-    el.classList.add("is-saving");
-    text.textContent = failed ? "Couldn't save — storage unavailable" : "Saving…";
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(function () {
-      el.classList.remove("is-saving");
-      text.textContent = failed ? "Couldn't save — storage unavailable" : "All changes saved";
-    }, 500);
   }
 
   function uid() {
