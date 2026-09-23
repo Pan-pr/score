@@ -45,11 +45,6 @@
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M2 5h16M2 10h16M2 15h16" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
         </button>
         <h1 class="page-title" id="pageTitle">Dashboard</h1>
-        <button class="btn btn-secondary" id="printBtn">Print transcript</button>
-        <div class="save-status" id="saveStatus">
-          <span class="save-dot"></span>
-          <span id="saveStatusText">All changes saved</span>
-        </div>
       </header>
 
       <!-- Dashboard -->
@@ -122,6 +117,7 @@
           <p>This dashboard lives entirely in this browser's storage. Export a backup before clearing your browser data, switching devices, or updating the site.</p>
         </div>
         <div class="data-actions">
+          <button class="btn btn-secondary" id="printBtn">Print transcript</button>
           <button class="btn btn-secondary" id="exportBtn">Export backup (.json)</button>
           <label class="btn btn-secondary" for="importInput">Import backup</label>
           <input type="file" id="importInput" accept="application/json" hidden>
