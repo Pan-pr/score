@@ -18,12 +18,12 @@
       "credit": 3,
       "kind": "graded",
       "items": [
-        { "id": "i1", "name": "Test 1", "score": 18.75, "full": 25 },
+        { "id": "i1", "name": "Test 1", "score": 0, "full": 25 },
         { "id": "i2", "name": "Test 2", "score": 0, "full": 25 },
         { "id": "i3", "name": "Test 3", "score": 0, "full": 30 },
         { "id": "i4", "name": "Project", "score": 0, "full": 10 },
-        { "id": "i5", "name": "Grader", "score": 5, "full": 5 },
-        { "id": "i6", "name": "Attendance", "score": 5, "full": 5 }
+        { "id": "i5", "name": "Grader", "score": 0, "full": 5 },
+        { "id": "i6", "name": "Attendance", "score": 0, "full": 5 }
       ],
       "scale": [
         { "cutoff": 0, "letter": "F" },
@@ -64,7 +64,7 @@
       "items": [
         { "id": "i1", "name": "Midterm", "score": 0, "full": 45 },
         { "id": "i2", "name": "Final", "score": 0, "full": 45 },
-        { "id": "i3", "name": "Quiz", "score": 8.75, "full": 10 }
+        { "id": "i3", "name": "Quiz", "score": 0, "full": 10 }
       ],
       "scale": [
         { "cutoff": 0, "letter": "F" },
@@ -83,11 +83,11 @@
       "credit": 3,
       "kind": "graded",
       "items": [
-        { "id": "i1", "name": "Presentation 1", "score": 4.14, "full": 5 },
+        { "id": "i1", "name": "Presentation 1", "score": 0, "full": 5 },
         { "id": "i2", "name": "Presentation 2", "score": 0, "full": 5 },
         { "id": "i3", "name": "Essay 1", "score": 0, "full": 10 },
         { "id": "i4", "name": "Essay 2", "score": 0, "full": 10 },
-        { "id": "i5", "name": "Classwork", "score": 9.875, "full": 10 },
+        { "id": "i5", "name": "Classwork", "score": 0, "full": 10 },
         { "id": "i6", "name": "Midterm", "score": 0, "full": 25 },
         { "id": "i7", "name": "Final", "score": 0, "full": 25 }
       ],
@@ -108,11 +108,11 @@
       "credit": 3,
       "kind": "graded",
       "items": [
-        { "id": "i1", "name": "Group Activity", "score": 6, "full": 48 },
-        { "id": "i2", "name": "Quiz Intro to Cluster", "score": 15, "full": 16 },
-        { "id": "i3", "name": "Teamwork", "score": 1, "full": 6 },
-        { "id": "i4", "name": "Assignment", "score": 2, "full": 6 },
-        { "id": "i5", "name": "Attendance", "score": 6, "full": 24 }
+        { "id": "i1", "name": "Group Activity", "score": 0, "full": 48 },
+        { "id": "i2", "name": "Quiz Intro to Cluster", "score": 0, "full": 16 },
+        { "id": "i3", "name": "Teamwork", "score": 0, "full": 6 },
+        { "id": "i4", "name": "Assignment", "score": 0, "full": 6 },
+        { "id": "i5", "name": "Attendance", "score": 0, "full": 24 }
       ],
       "scale": [
         { "cutoff": 0, "letter": "F" },
@@ -131,11 +131,11 @@
       "credit": 1,
       "kind": "graded",
       "items": [
-        { "id": "i1", "name": "Lab 1", "score": 7, "full": 7 },
-        { "id": "i2", "name": "Lab 2", "score": 7, "full": 7 },
-        { "id": "i3", "name": "Lab 3", "score": 7, "full": 7 },
-        { "id": "i4", "name": "Lab 4", "score": 6, "full": 7 },
-        { "id": "i5", "name": "Lab 5", "score": 6, "full": 7 },
+        { "id": "i1", "name": "Lab 1", "score": 0, "full": 7 },
+        { "id": "i2", "name": "Lab 2", "score": 0, "full": 7 },
+        { "id": "i3", "name": "Lab 3", "score": 0, "full": 7 },
+        { "id": "i4", "name": "Lab 4", "score": 0, "full": 7 },
+        { "id": "i5", "name": "Lab 5", "score": 0, "full": 7 },
         { "id": "i6", "name": "Lab 6", "score": 0, "full": 7 },
         { "id": "i7", "name": "Lab 7", "score": 0, "full": 7 },
         { "id": "i8", "name": "Lab 8", "score": 0, "full": 7 },
