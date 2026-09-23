@@ -185,6 +185,23 @@
     return "Needs " + neededPct.toFixed(1) + "% (" + neededScore.toFixed(1) + " of " + round2(remaining) + " pts left) to reach " + targetPercent + "%.";
   }
 
+  // Points still needed (on this course's own point scale) to reach the next
+  // letter grade up, e.g. "6.3 pts to B+". Returns null if not applicable.
+  function nextLetterGap(course) {
+    if (course.kind === "satisfactory") return null;
+    if (!course.scale || !course.scale.length) return null;
+    var r = computeCourse(course);
+    var sorted = course.scale.slice().sort(function (a, b) { return a.cutoff - b.cutoff; });
+    var next = null;
+    for (var i = 0; i < sorted.length; i++) {
+      if (Number(sorted[i].cutoff) > r.percent) { next = sorted[i]; break; }
+    }
+    if (!next) return null; // already at the top letter on this scale
+    var full = r.totalFull > 0 ? r.totalFull : 100;
+    var pointsNeeded = (Number(next.cutoff) / 100) * full - r.totalScore;
+    return pointsNeeded.toFixed(1) + " pts to " + next.letter;
+  }
+
   function letterClass(letter) {
     if (!letter) return "grade-none";
     if (letter === "S" || letter === "U") return "grade-s";
@@ -277,6 +294,13 @@
       creditEl.textContent = (Number(x.course.credit) || 0) + " credits";
       nameWrap.appendChild(nameEl);
       nameWrap.appendChild(creditEl);
+      var gap = nextLetterGap(x.course);
+      if (gap) {
+        var targetEl = document.createElement("div");
+        targetEl.className = "standing-target";
+        targetEl.textContent = gap;
+        nameWrap.appendChild(targetEl);
+      }
 
       var track = document.createElement("div");
       track.className = "standing-bar-track";
