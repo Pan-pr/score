@@ -13,9 +13,9 @@
       { id: "com-prog", name: "Com Prog", credit: 3, kind: "graded",
         items: [
           { id: "i1", name: "Test 1", score: 18.75, full: 25 },
-          { id: "i2", name: "Test 2", score: 0, full: 25 },
-          { id: "i3", name: "Test 3", score: 0, full: 30 },
-          { id: "i4", name: "Project", score: 0, full: 10 },
+          { id: "i2", name: "Test 2", score: null, full: 25 },
+          { id: "i3", name: "Test 3", score: null, full: 30 },
+          { id: "i4", name: "Project", score: null, full: 10 },
           { id: "i5", name: "Grader", score: 5, full: 5 },
           { id: "i6", name: "Attendance", score: 5, full: 5 }
         ],
@@ -23,15 +23,15 @@
       },
       { id: "physics-1", name: "Physics I", credit: 3, kind: "graded",
         items: [
-          { id: "i1", name: "Midterm", score: 0, full: 50 },
-          { id: "i2", name: "Final", score: 0, full: 50 }
+          { id: "i1", name: "Midterm", score: null, full: 50 },
+          { id: "i2", name: "Final", score: null, full: 50 }
         ],
         scale: [ {cutoff:0,letter:"F"},{cutoff:33,letter:"D"},{cutoff:40,letter:"D+"},{cutoff:48,letter:"C"},{cutoff:56,letter:"C+"},{cutoff:64,letter:"B"},{cutoff:72,letter:"B+"},{cutoff:80,letter:"A"} ]
       },
       { id: "calculus-1", name: "Calculus I", credit: 3, kind: "graded",
         items: [
-          { id: "i1", name: "Midterm", score: 0, full: 45 },
-          { id: "i2", name: "Final", score: 0, full: 45 },
+          { id: "i1", name: "Midterm", score: null, full: 45 },
+          { id: "i2", name: "Final", score: null, full: 45 },
           { id: "i3", name: "Quiz", score: 8.75, full: 10 }
         ],
         scale: [ {cutoff:0,letter:"F"},{cutoff:30,letter:"D"},{cutoff:40,letter:"D+"},{cutoff:50,letter:"C"},{cutoff:60,letter:"C+"},{cutoff:70,letter:"B"},{cutoff:75,letter:"B+"},{cutoff:80,letter:"A"} ]
@@ -39,12 +39,12 @@
       { id: "comm-eng", name: "Comm Eng", credit: 3, kind: "graded",
         items: [
           { id: "i1", name: "Presentation 1", score: 4.14, full: 5 },
-          { id: "i2", name: "Presentation 2", score: 0, full: 5 },
-          { id: "i3", name: "Essay 1", score: 0, full: 10 },
-          { id: "i4", name: "Essay 2", score: 0, full: 10 },
+          { id: "i2", name: "Presentation 2", score: null, full: 5 },
+          { id: "i3", name: "Essay 1", score: null, full: 10 },
+          { id: "i4", name: "Essay 2", score: null, full: 10 },
           { id: "i5", name: "Classwork", score: 9.875, full: 10 },
-          { id: "i6", name: "Midterm", score: 0, full: 25 },
-          { id: "i7", name: "Final", score: 0, full: 25 }
+          { id: "i6", name: "Midterm", score: null, full: 25 },
+          { id: "i7", name: "Final", score: null, full: 25 }
         ],
         scale: [ {cutoff:0,letter:"F"},{cutoff:50,letter:"D"},{cutoff:55,letter:"D+"},{cutoff:60,letter:"C"},{cutoff:65,letter:"C+"},{cutoff:70,letter:"B"},{cutoff:75,letter:"B+"},{cutoff:80,letter:"A"} ]
       },
@@ -65,12 +65,12 @@
           { id: "i3", name: "Lab 3", score: 7, full: 7 },
           { id: "i4", name: "Lab 4", score: 6, full: 7 },
           { id: "i5", name: "Lab 5", score: 6, full: 7 },
-          { id: "i6", name: "Lab 6", score: 0, full: 7 },
-          { id: "i7", name: "Lab 7", score: 0, full: 7 },
-          { id: "i8", name: "Lab 8", score: 0, full: 7 },
-          { id: "i9", name: "Lab 9", score: 0, full: 7 },
-          { id: "i10", name: "Lab 10", score: 0, full: 7 },
-          { id: "i11", name: "Final", score: 0, full: 30 }
+          { id: "i6", name: "Lab 6", score: null, full: 7 },
+          { id: "i7", name: "Lab 7", score: null, full: 7 },
+          { id: "i8", name: "Lab 8", score: null, full: 7 },
+          { id: "i9", name: "Lab 9", score: null, full: 7 },
+          { id: "i10", name: "Lab 10", score: null, full: 7 },
+          { id: "i11", name: "Final", score: null, full: 30 }
         ],
         scale: [ {cutoff:0,letter:"F"},{cutoff:50,letter:"D"},{cutoff:60,letter:"D+"},{cutoff:65,letter:"C"},{cutoff:70,letter:"C+"},{cutoff:75,letter:"B"},{cutoff:80,letter:"B+"},{cutoff:85,letter:"A"} ]
       },
@@ -93,7 +93,10 @@
   }
 
   function migrate(s) {
-    (s.courses || []).forEach(function (c) { if (!c.semester) c.semester = "Semester 1"; });
+    (s.courses || []).forEach(function (c) {
+      if (!c.semester) c.semester = "Semester 1";
+      (c.items || []).forEach(function (it) { if (it.score === "" || it.score === undefined) it.score = null; });
+    });
     return s;
   }
 
@@ -113,17 +116,24 @@
      Calculations
   ------------------------------------------------------- */
   function computeCourse(course) {
-    var totalScore = 0, totalFull = 0;
+    // An item with score null hasn't been graded yet. "percent" is the average
+    // over graded work only, so upcoming exams don't drag the standing to F.
+    var totalScore = 0, totalFull = 0, gradedFull = 0;
     (course.items || []).forEach(function (it) {
-      totalScore += Number(it.score) || 0;
-      totalFull += Number(it.full) || 0;
+      var full = Number(it.full) || 0;
+      totalFull += full;
+      if (isGraded(it)) {
+        totalScore += Number(it.score) || 0;
+        gradedFull += full;
+      }
     });
-    var percent = totalFull > 0 ? (totalScore / totalFull) * 100 : 0;
+    var percent = gradedFull > 0 ? (totalScore / gradedFull) * 100 : 0;
+    var hasGrades = gradedFull > 0;
 
     var letter = null;
     if (course.kind === "satisfactory") {
       letter = "S";
-    } else if (course.scale && course.scale.length) {
+    } else if (hasGrades && course.scale && course.scale.length) {
       var sorted = course.scale.slice().sort(function (a, b) { return a.cutoff - b.cutoff; });
       for (var i = 0; i < sorted.length; i++) {
         if (percent >= Number(sorted[i].cutoff)) letter = sorted[i].letter;
@@ -137,7 +147,15 @@
       gpaPoint = (v === null || v === "" || v === undefined) ? null : Number(v);
     }
 
-    return { totalScore: totalScore, totalFull: totalFull, percent: percent, letter: letter, gpaPoint: gpaPoint };
+    return {
+      totalScore: totalScore, totalFull: totalFull, gradedFull: gradedFull,
+      remainingFull: totalFull - gradedFull, percent: percent, hasGrades: hasGrades,
+      letter: letter, gpaPoint: gpaPoint
+    };
+  }
+
+  function isGraded(item) {
+    return item.score !== null && item.score !== undefined && item.score !== "";
   }
 
   function computeOverall() {
@@ -172,17 +190,18 @@
     });
   }
 
-  // Assumes assessment items for a course add up to 100 points total (true of every
-  // seeded course). Tells the learner what average they need on whatever's left.
+  // Tells the learner what average they need on the not-yet-graded items to
+  // finish the course at targetPercent of its total points.
   function whatIfMessage(course, targetPercent) {
     var r = computeCourse(course);
-    var remaining = Math.max(0, 100 - r.totalFull);
-    if (remaining <= 0) return "All items entered — final result is " + round2(r.percent) + "%.";
-    var neededScore = targetPercent - r.totalScore;
+    if (r.totalFull <= 0) return "Add assessment items to see what you need.";
+    var remaining = r.remainingFull;
+    if (remaining <= 0) return "All items graded — final result is " + round2(r.percent) + "%.";
+    var neededScore = (targetPercent / 100) * r.totalFull - r.totalScore;
     var neededPct = (neededScore / remaining) * 100;
     if (neededPct <= 0) return "Already secured " + targetPercent + "%+ no matter what's left.";
-    if (neededPct > 100) return "Not reachable — the best possible is " + round2(r.totalScore + remaining) + "%.";
-    return "Needs " + neededPct.toFixed(1) + "% (" + neededScore.toFixed(1) + " of " + round2(remaining) + " pts left) to reach " + targetPercent + "%.";
+    if (neededPct > 100) return "Not reachable — the best possible is " + round2(((r.totalScore + remaining) / r.totalFull) * 100) + "%.";
+    return "Needs " + neededPct.toFixed(1) + "% on what's left (" + neededScore.toFixed(1) + " of " + round2(remaining) + " pts) to reach " + targetPercent + "%.";
   }
 
   // Points still needed (on this course's own point scale) to reach the next
@@ -197,9 +216,10 @@
       if (Number(sorted[i].cutoff) > r.percent) { next = sorted[i]; break; }
     }
     if (!next) return null; // already at the top letter on this scale
-    var full = r.totalFull > 0 ? r.totalFull : 100;
-    var pointsNeeded = (Number(next.cutoff) / 100) * full - r.totalScore;
-    return pointsNeeded.toFixed(1) + " pts to " + next.letter;
+    if (!r.hasGrades || r.remainingFull <= 0) return null;
+    var pointsNeeded = (Number(next.cutoff) / 100) * r.totalFull - r.totalScore;
+    if (pointsNeeded > r.remainingFull) return null; // out of reach
+    return "Needs " + pointsNeeded.toFixed(1) + " of " + round2(r.remainingFull) + " remaining pts for " + next.letter;
   }
 
   function letterClass(letter) {
@@ -252,7 +272,7 @@
     var results = state.courses.map(function (c) {
       return { course: c, r: computeCourse(c) };
     });
-    var graded = results.filter(function (x) { return x.course.kind !== "satisfactory" && x.r.totalFull > 0; });
+    var graded = results.filter(function (x) { return x.course.kind !== "satisfactory" && x.r.hasGrades; });
 
     var highestEl = document.getElementById("statHighest");
     var lowestEl = document.getElementById("statLowest");
@@ -291,7 +311,9 @@
       nameEl.textContent = x.course.name || "Untitled course";
       var creditEl = document.createElement("div");
       creditEl.className = "standing-credit";
-      creditEl.textContent = (Number(x.course.credit) || 0) + " credits";
+      creditEl.textContent = (Number(x.course.credit) || 0) + " credits" +
+        (x.course.kind === "satisfactory" || !x.r.totalFull ? "" :
+          " · " + round2(x.r.gradedFull) + " of " + round2(x.r.totalFull) + " pts graded");
       nameWrap.appendChild(nameEl);
       nameWrap.appendChild(creditEl);
       var gap = nextLetterGap(x.course);
@@ -311,7 +333,7 @@
 
       var pct = document.createElement("div");
       pct.className = "standing-percent";
-      pct.textContent = x.course.kind === "satisfactory" ? "—" : Math.round(x.r.percent) + "%";
+      pct.textContent = (x.course.kind === "satisfactory" || !x.r.hasGrades) ? "—" : Math.round(x.r.percent) + "%";
 
       var badge = document.createElement("span");
       badge.className = "badge " + letterClass(x.r.letter);
@@ -346,7 +368,7 @@
       var badge = node.querySelector(".letter-badge");
       badge.textContent = r.letter || "—";
       badge.className = "badge letter-badge " + letterClass(r.letter);
-      node.querySelector(".course-percent").textContent = course.kind === "satisfactory" ? "Pass / fail" : Math.round(r.percent) + "%";
+      node.querySelector(".course-percent").textContent = percentLabel(course, r);
       node.querySelector(".credit-num").textContent = Number(course.credit) || 0;
 
       node.querySelector(".credit-input").value = course.credit;
@@ -360,7 +382,7 @@
         var row = itemRowTpl.content.firstElementChild.cloneNode(true);
         row.dataset.itemId = item.id;
         row.querySelector(".item-name").value = item.name;
-        row.querySelector(".item-score").value = item.score;
+        row.querySelector(".item-score").value = isGraded(item) ? item.score : "";
         row.querySelector(".item-full").value = item.full;
         itemsList.appendChild(row);
       });
@@ -393,6 +415,11 @@
       var sem = c.semester || "Semester 1";
       if (!seen[sem]) { seen[sem] = true; var opt = document.createElement("option"); opt.value = sem; datalist.appendChild(opt); }
     });
+  }
+
+  function percentLabel(course, r) {
+    if (course.kind === "satisfactory") return "Pass / fail";
+    return r.hasGrades ? Math.round(r.percent) + "%" : "No grades yet";
   }
 
   function round2(n) {
@@ -466,7 +493,8 @@
     var THEME_KEY = "ledger-theme";
     var saved = null;
     try { saved = localStorage.getItem(THEME_KEY); } catch (e) {}
-    var theme = saved || "dark";
+    var prefersLight = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches;
+    var theme = saved || (prefersLight ? "light" : "dark");
     applyTheme(theme);
 
     document.getElementById("themeToggle").addEventListener("click", function () {
@@ -513,7 +541,7 @@
       }
 
       if (e.target.closest(".add-item-btn")) {
-        course.items.push({ id: uid(), name: "New item", score: 0, full: 0 });
+        course.items.push({ id: uid(), name: "New item", score: null, full: 0 });
         saveState();
         renderCourses();
         reopen(id);
@@ -559,6 +587,13 @@
       }
     });
 
+    wrap.addEventListener("keydown", function (e) {
+      if (e.target.classList.contains("course-summary") && (e.key === "Enter" || e.key === " ")) {
+        e.preventDefault();
+        e.target.closest(".course").classList.toggle("is-open");
+      }
+    });
+
     wrap.addEventListener("input", function (e) {
       var courseEl = e.target.closest(".course");
       if (!courseEl) return;
@@ -600,7 +635,7 @@
         var row2 = e.target.closest(".items-row");
         var item2 = course.items.filter(function (it) { return it.id === row2.dataset.itemId; })[0];
         if (item2) {
-          item2.score = e.target.classList.contains("item-score") ? Number(e.target.value) || 0 : item2.score;
+          if (e.target.classList.contains("item-score")) item2.score = e.target.value === "" ? null : Number(e.target.value) || 0;
           item2.full = e.target.classList.contains("item-full") ? Number(e.target.value) || 0 : item2.full;
           saveState();
           updateCourseLiveTotals(courseEl, course);
@@ -635,7 +670,8 @@
       var id = uid();
       state.courses.push({
         id: id, name: "New course", credit: 3, kind: "graded",
-        items: [{ id: uid(), name: "Assignment 1", score: 0, full: 100 }],
+        semester: lastSemester(),
+        items: [{ id: uid(), name: "Assignment 1", score: null, full: 100 }],
         scale: [ {cutoff:0,letter:"F"},{cutoff:50,letter:"D"},{cutoff:55,letter:"D+"},{cutoff:60,letter:"C"},{cutoff:65,letter:"C+"},{cutoff:70,letter:"B"},{cutoff:75,letter:"B+"},{cutoff:80,letter:"A"} ]
       });
       saveState();
@@ -660,6 +696,11 @@
     }, 6000);
   }
 
+  function lastSemester() {
+    var last = state.courses[state.courses.length - 1];
+    return (last && last.semester) || "Semester 1";
+  }
+
   function reopen(id) {
     var el = document.querySelector('.course[data-id="' + id + '"]');
     if (el) el.classList.add("is-open");
@@ -682,7 +723,7 @@
     var r = computeCourse(course);
     courseEl.querySelector(".total-score").textContent = round2(r.totalScore);
     courseEl.querySelector(".total-full").textContent = round2(r.totalFull);
-    courseEl.querySelector(".course-percent").textContent = course.kind === "satisfactory" ? "Pass / fail" : Math.round(r.percent) + "%";
+    courseEl.querySelector(".course-percent").textContent = percentLabel(course, r);
     var badge = courseEl.querySelector(".letter-badge");
     badge.textContent = r.letter || "—";
     badge.className = "badge letter-badge " + letterClass(r.letter);
@@ -718,7 +759,7 @@
         try {
           var parsed = JSON.parse(reader.result);
           if (!parsed.courses || !parsed.gpaScale) throw new Error("bad shape");
-          state = parsed;
+          state = migrate(parsed);
           saveState();
           renderAll();
         } catch (err) {
@@ -731,7 +772,7 @@
 
     document.getElementById("resetBtn").addEventListener("click", function () {
       if (confirm("Reset all data back to the original sample courses? Your current data will be lost unless you've exported a backup.")) {
-        state = JSON.parse(JSON.stringify(SEED_DATA));
+        state = migrate(JSON.parse(JSON.stringify(SEED_DATA)));
         saveState();
         renderAll();
       }
