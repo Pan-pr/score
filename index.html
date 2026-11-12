@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ledger — Grade Dashboard</title>
-<link rel="icon" href="data:,">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -17,34 +17,36 @@
   <div class="app">
 
     <!-- Sidebar -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
       <div class="brand">
-        <span class="brand-mark">§</span>
+        <span class="brand-mark" aria-hidden="true">§</span>
         <span class="brand-name">Ledger</span>
       </div>
 
-      <nav class="nav">
-        <button class="nav-item is-active" data-page="dashboard">Dashboard</button>
-        <button class="nav-item" data-page="courses">Courses</button>
-        <button class="nav-item" data-page="settings">Settings</button>
+      <nav class="nav" aria-label="Pages">
+        <button class="nav-item" type="button" data-page="dashboard">Dashboard</button>
+        <button class="nav-item" type="button" data-page="courses">Courses</button>
+        <button class="nav-item" type="button" data-page="settings">Settings</button>
       </nav>
 
       <div class="sidebar-foot">
-        <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">
+        <button class="theme-toggle" type="button" id="themeToggle" aria-label="Dark mode">
           <span class="theme-toggle-dot"></span>
         </button>
         <span class="theme-toggle-label" id="themeToggleLabel">Dark mode</span>
       </div>
     </aside>
+    <div class="scrim" id="scrim"></div>
 
     <!-- Main -->
     <div class="main">
 
       <header class="topbar">
-        <button class="menu-btn" id="menuBtn" aria-label="Open menu">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M2 5h16M2 10h16M2 15h16" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        <button class="menu-btn" type="button" id="menuBtn" aria-label="Menu" aria-expanded="false" aria-controls="sidebar">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M2 5h16M2 10h16M2 15h16" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
         </button>
         <h1 class="page-title" id="pageTitle">Dashboard</h1>
+        <button class="btn btn-primary" type="button" id="addCourseBtn" hidden>Add course</button>
       </header>
 
       <!-- Dashboard -->
@@ -52,13 +54,13 @@
 
         <div class="hero">
           <div class="hero-gauge">
-            <svg viewBox="0 0 220 140" class="gauge-svg" id="gaugeSvg">
+            <svg viewBox="0 0 220 140" class="gauge-svg" id="gaugeSvg" aria-hidden="true">
               <path id="gaugeTrack" d="" fill="none" stroke-linecap="round"/>
               <path id="gaugeFill" d="" fill="none" stroke-linecap="round"/>
             </svg>
             <div class="gauge-readout">
-              <span class="gauge-value" id="cgpaValue">0.00</span>
-              <span class="gauge-label">GPAX · cumulative GPA</span>
+              <span class="gauge-value" id="cgpaValue">—</span>
+              <span class="gauge-label">Cumulative GPA (GPAX)</span>
             </div>
           </div>
 
@@ -66,26 +68,29 @@
             <div class="hero-stat">
               <dt>Credits earned</dt>
               <dd id="statCredits">0</dd>
+              <dd class="hero-stat-sub" id="statCreditsSub"></dd>
             </div>
             <div class="hero-stat">
-              <dt>Current semester GPA</dt>
+              <dt>Semester GPA</dt>
               <dd id="statTermGpa">—</dd>
-              <dd class="hero-stat-sub" id="statTermLabel"></dd>
+              <dd class="hero-stat-sub" id="statTermGpaSub"></dd>
             </div>
             <div class="hero-stat">
-              <dt>Highest this semester</dt>
-              <dd id="statHighest">—</dd>
+              <dt>Strongest course</dt>
+              <dd class="is-text" id="statHighest">—</dd>
+              <dd class="hero-stat-sub" id="statHighestSub"></dd>
             </div>
             <div class="hero-stat">
-              <dt>Needs attention this semester</dt>
-              <dd id="statLowest">—</dd>
+              <dt>Needs attention</dt>
+              <dd class="is-text" id="statLowest">—</dd>
+              <dd class="hero-stat-sub" id="statLowestSub"></dd>
             </div>
           </dl>
         </div>
 
         <div class="section-head">
           <h2>Course standing</h2>
-          <p>Live percentage and letter grade for every course, grouped by year and term. GPAX is your cumulative GPA up to that term.</p>
+          <p>Projected from the work graded so far. Select a course to edit it.</p>
         </div>
 
         <div class="standing-list" id="standingList"></div>
@@ -94,46 +99,44 @@
 
       <!-- Courses -->
       <section class="page" id="page-courses">
-        <div class="section-head with-action">
-          <div>
-            <h2>Courses</h2>
-            <p>Four years of Semester 1 and 2, with an optional summer each year. Edit scores, credits, and grading scales; everything saves as you type.</p>
-          </div>
-          <button class="btn btn-primary" id="addCourseBtn">Add year</button>
-        </div>
-
+        <p class="page-intro">Select a course to enter scores. Everything saves as you type.</p>
         <div class="semester-list" id="courseAccordion"></div>
+        <button class="btn btn-ghost add-year-btn" type="button" id="addYearBtn">Add year</button>
       </section>
 
       <!-- Settings -->
       <section class="page" id="page-settings">
-        <div class="section-head">
-          <h2>Grade point scale</h2>
-          <p>The point value assigned to each letter grade when computing GPA. Leave a value blank for grades that don't count toward GPA, like S or U.</p>
+        <div class="settings-group">
+          <div class="section-head">
+            <h2>Grade point scale</h2>
+            <p>Points each letter is worth in your GPA. Leave blank for letters that don't count, like S or U.</p>
+          </div>
+          <div class="scale-editor" id="gpaScaleEditor"></div>
         </div>
-        <div class="scale-editor" id="gpaScaleEditor"></div>
 
-        <div class="section-head">
-          <h2>Degree</h2>
-          <p>Total credits your program requires. When set, the dashboard shows credits earned out of this number.</p>
-        </div>
-        <div class="degree-settings">
+        <div class="settings-group">
+          <div class="section-head">
+            <h2>Degree</h2>
+            <p>When set, the dashboard shows credits earned against this total.</p>
+          </div>
           <label class="field">
             <span>Credits required to graduate</span>
-            <input type="number" id="creditsRequired" min="0" step="1" placeholder="e.g. 146">
+            <input type="number" id="creditsRequired" min="0" step="1" inputmode="numeric" placeholder="e.g. 146">
           </label>
         </div>
 
-        <div class="section-head">
-          <h2>Data</h2>
-          <p>This dashboard lives entirely in this browser's storage. Export a backup before clearing your browser data, switching devices, or updating the site.</p>
-        </div>
-        <div class="data-actions">
-          <button class="btn btn-secondary" id="printBtn">Print transcript</button>
-          <button class="btn btn-secondary" id="exportBtn">Export backup (.json)</button>
-          <label class="btn btn-secondary" for="importInput">Import backup</label>
-          <input type="file" id="importInput" accept="application/json" hidden>
-          <button class="btn btn-danger" id="resetBtn">Reset to sample data</button>
+        <div class="settings-group">
+          <div class="section-head">
+            <h2>Data</h2>
+            <p>Your grades live only in this browser. Export a backup before clearing browser data or switching devices.</p>
+          </div>
+          <div class="data-actions">
+            <button class="btn" type="button" id="exportBtn">Export backup</button>
+            <button class="btn" type="button" id="importBtn">Import backup</button>
+            <input type="file" id="importInput" accept=".json,application/json" hidden>
+            <button class="btn" type="button" id="printBtn">Print transcript</button>
+            <button class="btn btn-danger" type="button" id="resetBtn">Reset to sample data</button>
+          </div>
         </div>
       </section>
 
@@ -143,48 +146,44 @@
   <!-- Course card template -->
   <template id="courseTemplate">
     <article class="course" data-id="">
-      <div class="course-summary" role="button" tabindex="0">
-        <div class="course-summary-main">
-          <input class="course-name-input" type="text" value="" placeholder="Course name">
-          <span class="badge letter-badge">—</span>
-        </div>
-        <div class="course-summary-meta">
-          <span class="course-percent">0%</span>
-          <span class="course-credit-tag"><span class="credit-num">0</span> credits</span>
-          <svg class="chevron" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div>
-      </div>
+      <button class="course-summary" type="button" aria-expanded="false">
+        <span class="course-name"></span>
+        <span class="course-credit-tag"></span>
+        <span class="course-percent"></span>
+        <span class="badge letter-badge">—</span>
+        <svg class="chevron" width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
 
       <div class="course-body">
         <div class="course-controls">
-          <label class="field">
-            <span>Credit</span>
-            <input type="number" class="credit-input" min="0" step="1">
+          <label class="field field-name">
+            <span>Course name</span>
+            <input type="text" class="course-name-input" placeholder="e.g. Calculus II">
+          </label>
+          <label class="field field-credit">
+            <span>Credits</span>
+            <input type="number" class="credit-input" min="0" step="1" inputmode="numeric">
           </label>
           <label class="field">
             <span>Term</span>
             <select class="term-select"></select>
           </label>
           <label class="field">
-            <span>Type</span>
+            <span>Grading</span>
             <select class="kind-select">
-              <option value="graded">Graded</option>
-              <option value="satisfactory">Satisfactory / Ungraded</option>
+              <option value="graded">Letter grade</option>
+              <option value="satisfactory">Pass / fail (S/U)</option>
             </select>
           </label>
           <label class="field field-check">
             <input type="checkbox" class="withdrawn-input">
             <span>Withdrawn (W)</span>
           </label>
-          <button class="btn btn-ghost delete-course-btn" type="button">Remove course</button>
         </div>
 
-        <div class="items-block">
-          <div class="items-head">
+        <div class="course-grid">
+          <div class="items-block">
             <h3>Assessment items</h3>
-            <button class="btn btn-ghost add-item-btn" type="button">Add item</button>
-          </div>
-          <div class="items-table">
             <div class="items-row items-row-head">
               <span>Name</span>
               <span>Score</span>
@@ -192,63 +191,66 @@
               <span></span>
             </div>
             <div class="items-list"></div>
+            <div class="items-row items-total">
+              <span><span class="total-label">Total</span> <span class="total-note"></span></span>
+              <span class="total-score">0</span>
+              <span class="total-full">0</span>
+              <span></span>
+            </div>
+            <button class="btn btn-ghost add-item-btn" type="button">Add item</button>
           </div>
-          <div class="items-total">
-            <span>Total</span>
-            <span class="total-score">0</span>
-            <span class="total-full">0</span>
+
+          <div class="course-side">
+            <div class="whatif-block">
+              <h3>Grade needed</h3>
+              <label class="whatif-row">
+                <span>To finish at</span>
+                <input type="number" class="whatif-target" value="80" min="0" max="100" step="1" inputmode="numeric" aria-label="Target percent">
+                <span>%</span>
+              </label>
+              <p class="whatif-result"></p>
+            </div>
+
+            <details class="scale-block">
+              <summary>
+                <h3>Grading scale</h3>
+                <span class="scale-summary"></span>
+                <svg class="chevron" width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </summary>
+              <div class="scale-row scale-row-head">
+                <span>Minimum %</span>
+                <span>Letter</span>
+                <span></span>
+              </div>
+              <div class="scale-list"></div>
+              <button class="btn btn-ghost add-cutoff-btn" type="button">Add grade</button>
+            </details>
           </div>
         </div>
 
-        <div class="scale-block">
-          <div class="items-head">
-            <h3>Grading scale for this course</h3>
-            <button class="btn btn-ghost add-cutoff-btn" type="button">Add row</button>
-          </div>
-          <div class="scale-table">
-            <div class="scale-row scale-row-head">
-              <span>Minimum %</span>
-              <span>Letter</span>
-              <span></span>
-            </div>
-            <div class="scale-list"></div>
-          </div>
-        </div>
-        <div class="whatif-block">
-          <div class="items-head"><h3>Grade needed</h3></div>
-          <div class="whatif-row">
-            <label class="field">
-              <span>Target %</span>
-              <input type="number" class="whatif-target" value="80" min="0" max="100" step="1">
-            </label>
-            <p class="whatif-result"></p>
-          </div>
+        <div class="course-foot">
+          <button class="btn btn-ghost btn-danger delete-course-btn" type="button">Remove course</button>
         </div>
       </div>
     </article>
   </template>
 
-
   <!-- Item row template -->
   <template id="itemRowTemplate">
     <div class="items-row">
-      <input type="text" class="item-name" placeholder="Item name">
-      <input type="number" class="item-score" step="0.01" placeholder="—" title="Leave blank if not graded yet">
-      <input type="number" class="item-full" step="0.01">
-      <button class="row-remove" type="button" aria-label="Remove item">
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-      </button>
+      <input type="text" class="item-name" placeholder="Item name" aria-label="Item name">
+      <input type="number" class="item-score" step="any" inputmode="decimal" placeholder="—" aria-label="Score" title="Leave blank if not graded yet">
+      <input type="number" class="item-full" step="any" min="0" inputmode="decimal" placeholder="0" aria-label="Out of">
+      <button class="row-remove" type="button" aria-label="Remove item"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button>
     </div>
   </template>
 
   <!-- Scale row template -->
   <template id="scaleRowTemplate">
     <div class="scale-row">
-      <input type="number" class="scale-cutoff" step="0.01">
-      <input type="text" class="scale-letter" maxlength="2">
-      <button class="row-remove" type="button" aria-label="Remove row">
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-      </button>
+      <input type="number" class="scale-cutoff" step="any" inputmode="decimal" aria-label="Minimum percent">
+      <input type="text" class="scale-letter" maxlength="2" placeholder="Letter" aria-label="Letter">
+      <button class="row-remove" type="button" aria-label="Remove grade"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button>
     </div>
   </template>
 
@@ -256,13 +258,13 @@
   <template id="gpaScaleRowTemplate">
     <label class="gpa-scale-row">
       <span class="gpa-scale-letter"></span>
-      <input type="number" class="gpa-scale-point" step="0.1" placeholder="—">
+      <input type="number" class="gpa-scale-point" step="0.1" inputmode="decimal" placeholder="—">
     </label>
   </template>
 
-  <div class="toast" id="toast">
+  <div class="toast" id="toast" role="status" aria-live="polite">
     <span class="toast-msg"></span>
-    <button class="btn btn-ghost" id="toastUndo">Undo</button>
+    <button class="btn btn-ghost" type="button" id="toastUndo">Undo</button>
   </div>
 
   <script src="js/app.js"></script>

@@ -133,8 +133,22 @@
     return "Year " + t.year + " · " + TERM_NAMES[t.kind];
   }
 
+  var DEFAULT_GPA_SCALE = { "A": 4, "B+": 3.5, "B": 3, "C+": 2.5, "C": 2, "D+": 1.5, "D": 1, "F": 0, "S": null, "U": null };
+
   function migrate(s) {
-    s.courses = s.courses || [];
+    s.courses = Array.isArray(s.courses) ? s.courses : [];
+    if (!s.gpaScale || typeof s.gpaScale !== "object") s.gpaScale = JSON.parse(JSON.stringify(DEFAULT_GPA_SCALE));
+    // Backups edited by hand (or from older versions) can miss fields the
+    // editor relies on, so fill them in rather than crash later.
+    s.courses.forEach(function (c) {
+      if (!c.id) c.id = uid();
+      if (typeof c.name !== "string") c.name = "";
+      if (c.kind !== "satisfactory") c.kind = "graded";
+      c.credit = Number(c.credit) || 0;
+      if (!Array.isArray(c.items)) c.items = [];
+      if (!Array.isArray(c.scale)) c.scale = [];
+      c.items.forEach(function (it) { if (!it.id) it.id = uid(); });
+    });
     if (!s.terms) {
       s.terms = [];
       for (var y = 0; y < DEFAULT_YEARS; y++) addYear(s);
@@ -204,7 +218,7 @@
     } else if (course.kind === "satisfactory") {
       letter = "S";
     } else if (hasGrades && course.scale && course.scale.length) {
-      var sorted = course.scale.slice().sort(function (a, b) { return a.cutoff - b.cutoff; });
+      var sorted = sortedScale(course);
       for (var i = 0; i < sorted.length; i++) {
         if (percent >= Number(sorted[i].cutoff)) letter = sorted[i].letter;
       }
@@ -224,6 +238,12 @@
     };
   }
 
+  // Scale rows in ascending order; rows still missing a letter are ignored.
+  function sortedScale(course) {
+    return (course.scale || []).filter(function (s) { return s.letter; })
+      .sort(function (a, b) { return a.cutoff - b.cutoff; });
+  }
+
   function isGraded(item) {
     return item.score !== null && item.score !== undefined && item.score !== "";
   }
@@ -240,12 +260,13 @@
       }
     });
     var cgpa = totalCredits > 0 ? qualityPoints / totalCredits : 0;
-    return { cgpa: cgpa, totalCredits: totalCredits, attemptedCredits: attemptedCredits, earnedCredits: earned };
+    return { cgpa: cgpa, hasGpa: totalCredits > 0, totalCredits: totalCredits, attemptedCredits: attemptedCredits, earnedCredits: earned };
   }
 
-  // Credits that count toward the total: not withdrawn and not failed.
+  // Credits that count toward the total: not withdrawn, not failed, and with
+  // at least one grade in (planned courses haven't earned anything yet).
   function earnedCredits(course, r) {
-    if (course.withdrawn || r.letter === "F" || r.letter === "U") return 0;
+    if (course.withdrawn || !r.letter || r.letter === "F" || r.letter === "U") return 0;
     return Number(course.credit) || 0;
   }
 
@@ -325,7 +346,7 @@
     if (course.kind === "satisfactory" || course.withdrawn) return null;
     if (!course.scale || !course.scale.length) return null;
     var r = computeCourse(course);
-    var sorted = course.scale.slice().sort(function (a, b) { return a.cutoff - b.cutoff; });
+    var sorted = sortedScale(course);
     var next = null;
     for (var i = 0; i < sorted.length; i++) {
       if (Number(sorted[i].cutoff) > r.percent) { next = sorted[i]; break; }
@@ -363,7 +384,7 @@
     return "M " + start.x + " " + start.y + " A " + r + " " + r + " 0 " + largeArc + " 0 " + end.x + " " + end.y;
   }
 
-  function renderGauge(cgpa) {
+  function renderGauge(cgpa, hasGpa) {
     var cx = 110, cy = 118, r = 92;
     var startAngle = -120, endAngle = 120;
     var track = document.getElementById("gaugeTrack");
@@ -372,49 +393,109 @@
     var clamped = Math.max(0, Math.min(4, cgpa));
     var sweep = startAngle + (clamped / 4) * (endAngle - startAngle);
     fill.setAttribute("d", arcPath(cx, cy, r, startAngle, sweep));
-    document.getElementById("cgpaValue").textContent = clamped.toFixed(2);
+    document.getElementById("cgpaValue").textContent = hasGpa ? clamped.toFixed(2) : "—";
+  }
+
+
+  /* -------------------------------------------------------
+     Small helpers
+  ------------------------------------------------------- */
+  function $(id) { return document.getElementById(id); }
+
+  function round2(n) {
+    return Math.round((Number(n) || 0) * 100) / 100;
+  }
+
+  function el(tag, className, text) {
+    var node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  function ghostButton(className, text) {
+    var btn = el("button", "btn btn-ghost " + className, text);
+    btn.type = "button";
+    return btn;
+  }
+
+  function findCourse(id) {
+    return state.courses.filter(function (c) { return c.id === id; })[0];
+  }
+
+  function courseTitle(course) {
+    return course.name || "Untitled course";
+  }
+
+  function creditsLabel(n) {
+    n = Number(n) || 0;
+    return n + (n === 1 ? " credit" : " credits");
+  }
+
+  function percentLabel(course, r) {
+    if (course.withdrawn) return "Withdrawn";
+    if (course.kind === "satisfactory") return "Pass / fail";
+    return r.hasGrades ? Math.round(r.percent) + "%" : "No grades yet";
+  }
+
+  // "F 0 · D 50 · … · A 80" — the scale at a glance while it's folded away.
+  function scaleSummary(course) {
+    var rows = sortedScale(course);
+    if (!rows.length) return "Not set";
+    return rows[rows.length - 1].letter + " from " + round2(rows[rows.length - 1].cutoff) + "% · " +
+      rows.length + " grades";
+  }
+
+  // The current semester is the latest term that has any courses in it.
+  function currentTerm() {
+    var active = computeTerms().filter(function (t) { return t.courses.length; });
+    return active[active.length - 1] || null;
   }
 
   /* -------------------------------------------------------
      Rendering — Dashboard
   ------------------------------------------------------- */
+  function setStat(id, value, sub) {
+    $(id).textContent = value;
+    $(id + "Sub").textContent = sub || "";
+  }
+
   function renderDashboard() {
     var overall = computeOverall();
-    renderGauge(overall.cgpa);
+    renderGauge(overall.cgpa, overall.hasGpa);
+    $("gaugeFill").style.display = overall.hasGpa && overall.cgpa > 0 ? "" : "none";
 
-    document.getElementById("statCredits").textContent = overall.earnedCredits +
-      (state.creditsRequired ? " / " + state.creditsRequired : "");
-    // The current semester is the latest term that has any courses in it.
-    var activeTerms = computeTerms().filter(function (t) { return t.courses.length; });
-    var current = activeTerms[activeTerms.length - 1];
-    document.getElementById("statTermGpa").textContent = current && current.stats.hasGpa ? current.stats.gpa.toFixed(2) : "—";
-    document.getElementById("statTermLabel").textContent = current ? termLabel(current.term) : "No courses yet";
+    var required = state.creditsRequired;
+    setStat("statCredits", String(overall.earnedCredits),
+      required ? "of " + required + " required · " + Math.min(100, Math.round((overall.earnedCredits / required) * 100)) + "%" : "");
 
-    var results = (current ? current.courses : []).map(function (c) {
+    var current = currentTerm();
+    setStat("statTermGpa", current && current.stats.hasGpa ? current.stats.gpa.toFixed(2) : "—",
+      current ? termLabel(current.term) : "No courses yet");
+
+    var graded = (current ? current.courses : []).map(function (c) {
       return { course: c, r: computeCourse(c) };
+    }).filter(function (x) {
+      return x.course.kind !== "satisfactory" && !x.course.withdrawn && x.r.hasGrades;
     });
-    var graded = results.filter(function (x) { return x.course.kind !== "satisfactory" && !x.course.withdrawn && x.r.hasGrades; });
-
-    var highestEl = document.getElementById("statHighest");
-    var lowestEl = document.getElementById("statLowest");
+    var describe = function (x) { return Math.round(x.r.percent) + "% · " + (x.r.letter || "—"); };
     if (graded.length) {
       var highest = graded.reduce(function (a, b) { return b.r.percent > a.r.percent ? b : a; });
       var lowest = graded.reduce(function (a, b) { return b.r.percent < a.r.percent ? b : a; });
-      highestEl.textContent = highest.course.name + " · " + (highest.r.letter || "—");
-      lowestEl.textContent = lowest.course.name + " · " + (lowest.r.letter || "—");
+      setStat("statHighest", courseTitle(highest.course), describe(highest));
+      // With a single graded course there is nothing to compare it against.
+      if (lowest === highest) setStat("statLowest", "—", "");
+      else setStat("statLowest", courseTitle(lowest.course), describe(lowest));
     } else {
-      highestEl.textContent = "—";
-      lowestEl.textContent = "—";
+      setStat("statHighest", "—", "");
+      setStat("statLowest", "—", "");
     }
 
-    var list = document.getElementById("standingList");
+    var list = $("standingList");
     list.innerHTML = "";
     var years = computeYears().filter(function (y) { return y.courses.length; });
     if (!years.length) {
-      var empty = document.createElement("p");
-      empty.className = "term-empty";
-      empty.textContent = "No courses yet. Add them on the Courses page.";
-      list.appendChild(empty);
+      list.appendChild(el("p", "term-empty", "No courses yet. Add your first one on the Courses page."));
     }
     years.forEach(function (y) {
       var key = "y" + y.year;
@@ -436,7 +517,7 @@
   }
 
   function headerRow(className, key, title, meta) {
-    var head = collapseToggle("button", className, key);
+    var head = collapseToggle(className, key);
     var nameSpan = el("span", "header-title");
     nameSpan.appendChild(head.firstChild); // chevron
     nameSpan.appendChild(document.createTextNode(title));
@@ -445,67 +526,51 @@
     return head;
   }
 
+  // A row is a button: selecting it opens that course on the Courses page.
   function buildStandingRow(course) {
     var r = computeCourse(course);
-    var row = document.createElement("div");
-    row.className = "standing-row" + (course.withdrawn ? " is-withdrawn" : "");
+    var row = el("button", "standing-row" + (course.withdrawn ? " is-withdrawn" : ""));
+    row.type = "button";
+    row.dataset.id = course.id;
+    row.title = "Edit " + courseTitle(course);
 
-    var nameWrap = document.createElement("div");
-    var nameEl = document.createElement("div");
-    nameEl.className = "standing-name";
-    nameEl.textContent = course.name || "Untitled course";
-    var creditEl = document.createElement("div");
-    creditEl.className = "standing-credit";
-    creditEl.textContent = (Number(course.credit) || 0) + " credits" +
+    var nameWrap = el("span", "standing-main");
+    nameWrap.appendChild(el("span", "standing-name", courseTitle(course)));
+    nameWrap.appendChild(el("span", "standing-credit", creditsLabel(course.credit) +
       (course.kind === "satisfactory" || !r.totalFull ? "" :
-        " · " + round2(r.gradedFull) + " of " + round2(r.totalFull) + " pts graded");
-    nameWrap.appendChild(nameEl);
-    nameWrap.appendChild(creditEl);
+        " · " + round2(r.gradedFull) + " of " + round2(r.totalFull) + " pts graded")));
     var gap = nextLetterGap(course);
-    if (gap) {
-      var targetEl = document.createElement("div");
-      targetEl.className = "standing-target";
-      targetEl.textContent = gap;
-      nameWrap.appendChild(targetEl);
-    }
+    if (gap) nameWrap.appendChild(el("span", "standing-target", gap));
 
-    var track = document.createElement("div");
-    track.className = "standing-bar-track";
-    var barFill = document.createElement("div");
-    barFill.className = "standing-bar-fill";
+    var track = el("span", "standing-bar-track");
+    var barFill = el("span", "standing-bar-fill");
     barFill.style.width = (course.withdrawn ? 0 : Math.max(0, Math.min(100, r.percent))) + "%";
     track.appendChild(barFill);
 
-    var pct = document.createElement("div");
-    pct.className = "standing-percent";
-    pct.textContent = (course.kind === "satisfactory" || course.withdrawn || !r.hasGrades) ? "—" : Math.round(r.percent) + "%";
-
-    var badge = document.createElement("span");
-    badge.className = "badge " + letterClass(r.letter);
-    badge.textContent = r.letter || "—";
-
+    var showPct = course.kind !== "satisfactory" && !course.withdrawn && r.hasGrades;
     row.appendChild(nameWrap);
     row.appendChild(track);
-    row.appendChild(pct);
-    row.appendChild(badge);
+    row.appendChild(el("span", "standing-percent", showPct ? Math.round(r.percent) + "%" : "—"));
+    row.appendChild(el("span", "badge " + letterClass(r.letter), r.letter || "—"));
     return row;
   }
 
-  /* -------------------------------------------------------
-     Rendering — Courses
-  ------------------------------------------------------- */
   /* -------------------------------------------------------
      Collapsing years and terms. Keys are "y1" for a year and the
      term id ("y1-1", "y1-summer") for a term; the same key folds
      the matching block on both the Dashboard and Courses pages.
   ------------------------------------------------------- */
   var COLLAPSE_KEY = "ledger-collapsed";
-  var CHEVRON_SVG = '<svg class="chevron" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var CHEVRON_SVG = '<svg class="chevron" width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   var collapsed = {};
   try { collapsed = JSON.parse(localStorage.getItem(COLLAPSE_KEY)) || {}; } catch (e) { collapsed = {}; }
 
-  function collapseToggle(tag, className, key) {
-    var btn = el(tag, className + " collapse-toggle");
+  function saveCollapsed() {
+    try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(collapsed)); } catch (err) { /* ignore */ }
+  }
+
+  function collapseToggle(className, key) {
+    var btn = el("button", className + " collapse-toggle");
     btn.type = "button";
     btn.dataset.key = key;
     btn.setAttribute("aria-expanded", collapsed[key] ? "false" : "true");
@@ -522,9 +587,8 @@
       var toggle = e.target.closest(".collapse-toggle");
       if (!toggle) return;
       var key = toggle.dataset.key;
-      collapsed[key] = !collapsed[key];
-      if (!collapsed[key]) delete collapsed[key];
-      try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(collapsed)); } catch (err) {}
+      if (collapsed[key]) delete collapsed[key]; else collapsed[key] = true;
+      saveCollapsed();
       document.querySelectorAll('.collapse-toggle[data-key="' + key + '"]').forEach(function (t) {
         t.closest(".collapsible").classList.toggle("is-collapsed", !!collapsed[key]);
         t.setAttribute("aria-expanded", collapsed[key] ? "false" : "true");
@@ -532,10 +596,19 @@
     });
   }
 
-
+  /* -------------------------------------------------------
+     Rendering — Courses
+  ------------------------------------------------------- */
   function renderCourses() {
-    var wrap = document.getElementById("courseAccordion");
-    var openIds = Array.prototype.slice.call(wrap.querySelectorAll(".course.is-open")).map(function (n) { return n.dataset.id; });
+    var wrap = $("courseAccordion");
+    var idsOf = function (selector) {
+      return Array.prototype.map.call(wrap.querySelectorAll(selector), function (n) {
+        return n.closest(".course").dataset.id;
+      });
+    };
+    // Re-rendering must not fold away what the learner has open.
+    var openIds = idsOf(".course.is-open");
+    var openScaleIds = idsOf(".scale-block[open]");
 
     wrap.innerHTML = "";
     var years = computeYears();
@@ -548,61 +621,53 @@
         var section = buildTermSection(t);
         termsWrap.appendChild(section);
         var list = section.querySelector(".course-accordion");
-        if (!t.courses.length) {
-          var empty = document.createElement("p");
-          empty.className = "term-empty";
-          empty.textContent = "No courses yet.";
-          list.appendChild(empty);
-        }
-        t.courses.forEach(function (course) { list.appendChild(buildCourseNode(course, openIds)); });
+        t.courses.forEach(function (course) {
+          var node = buildCourseNode(course);
+          setOpen(node, openIds.indexOf(course.id) !== -1);
+          if (openScaleIds.indexOf(course.id) !== -1) node.querySelector(".scale-block").open = true;
+          list.appendChild(node);
+        });
       });
     });
   }
 
-  function buildCourseNode(course, openIds) {
-    var courseTpl = document.getElementById("courseTemplate");
-    var node = courseTpl.content.firstElementChild.cloneNode(true);
-    node.dataset.id = course.id;
-    if (openIds.indexOf(course.id) !== -1) node.classList.add("is-open");
+  function setOpen(courseEl, open) {
+    courseEl.classList.toggle("is-open", open);
+    courseEl.querySelector(".course-summary").setAttribute("aria-expanded", open ? "true" : "false");
+  }
 
-    var r = computeCourse(course);
+  function buildCourseNode(course) {
+    var node = $("courseTemplate").content.firstElementChild.cloneNode(true);
+    node.dataset.id = course.id;
+    if (course.withdrawn) node.classList.add("is-withdrawn");
+    if (course.kind === "satisfactory") node.classList.add("is-satisfactory");
 
     node.querySelector(".course-name-input").value = course.name;
-    var badge = node.querySelector(".letter-badge");
-    badge.textContent = r.letter || "—";
-    badge.className = "badge letter-badge " + letterClass(r.letter);
-    node.querySelector(".course-percent").textContent = percentLabel(course, r);
-    node.querySelector(".credit-num").textContent = Number(course.credit) || 0;
-
     node.querySelector(".credit-input").value = course.credit;
     node.querySelector(".kind-select").value = course.kind;
     node.querySelector(".withdrawn-input").checked = !!course.withdrawn;
-    if (course.withdrawn) node.classList.add("is-withdrawn");
     var termSelect = node.querySelector(".term-select");
     state.terms.forEach(function (t) {
-      var opt = document.createElement("option");
+      var opt = el("option", null, termLabel(t));
       opt.value = t.id;
-      opt.textContent = termLabel(t);
       termSelect.appendChild(opt);
     });
     termSelect.value = course.termId;
-    node.querySelector(".whatif-result").textContent = whatIfMessage(course, Number(node.querySelector(".whatif-target").value) || 80);
+    node.querySelector(".whatif-target").value = targetOf(course);
 
     var itemsList = node.querySelector(".items-list");
-    var itemRowTpl = document.getElementById("itemRowTemplate");
+    var itemRowTpl = $("itemRowTemplate");
     (course.items || []).forEach(function (item) {
       var row = itemRowTpl.content.firstElementChild.cloneNode(true);
       row.dataset.itemId = item.id;
       row.querySelector(".item-name").value = item.name;
       row.querySelector(".item-score").value = isGraded(item) ? item.score : "";
-      row.querySelector(".item-full").value = item.full;
+      row.querySelector(".item-full").value = item.full || "";
       itemsList.appendChild(row);
     });
-    node.querySelector(".total-score").textContent = round2(r.totalScore);
-    node.querySelector(".total-full").textContent = round2(r.totalFull);
 
     var scaleList = node.querySelector(".scale-list");
-    var scaleRowTpl = document.getElementById("scaleRowTemplate");
+    var scaleRowTpl = $("scaleRowTemplate");
     (course.scale || []).slice().sort(function (a, b) { return a.cutoff - b.cutoff; }).forEach(function (row) {
       var rowEl = scaleRowTpl.content.firstElementChild.cloneNode(true);
       rowEl.querySelector(".scale-cutoff").value = row.cutoff;
@@ -610,49 +675,25 @@
       scaleList.appendChild(rowEl);
     });
 
-    // Hide item/scale editing chrome for satisfactory (pass/fail) courses.
-    if (course.kind === "satisfactory") {
-      node.querySelector(".items-block").style.display = "none";
-      node.querySelector(".scale-block").style.display = "none";
-      node.querySelector(".whatif-block").style.display = "none";
-    }
-    if (course.withdrawn) node.querySelector(".whatif-block").style.display = "none";
-
+    updateCourseLive(node, course);
     return node;
   }
 
-  function percentLabel(course, r) {
-    if (course.withdrawn) return "Withdrawn";
-    if (course.kind === "satisfactory") return "Pass / fail";
-    return r.hasGrades ? Math.round(r.percent) + "%" : "No grades yet";
-  }
-
-  function round2(n) {
-    return Math.round((Number(n) || 0) * 100) / 100;
-  }
-
-  function el(tag, className, text) {
-    var node = document.createElement(tag);
-    if (className) node.className = className;
-    if (text !== undefined) node.textContent = text;
-    return node;
-  }
-
-  function ghostButton(className, text) {
-    var btn = el("button", "btn btn-ghost " + className, text);
-    btn.type = "button";
-    return btn;
+  function targetOf(course) {
+    var t = Number(course.target);
+    return t > 0 ? t : 80;
   }
 
   function buildYearSection(y, canRemove) {
-    var section = el("section", "year-section" + collapsibleClass("y" + y.year));
+    var key = "y" + y.year;
+    var section = el("section", "year-section" + collapsibleClass(key));
     section.dataset.year = y.year;
 
     var head = el("div", "year-section-head");
-    var toggle = collapseToggle("button", "year-toggle", "y" + y.year);
+    var toggle = collapseToggle("year-toggle", key);
     toggle.appendChild(el("span", null, "Year " + y.year));
     head.appendChild(toggle);
-    head.appendChild(el("span", "year-section-meta", statsMeta(y.stats)));
+    head.appendChild(el("span", "year-section-meta", y.courses.length ? statsMeta(y.stats) : "No courses"));
     var hasSummer = y.terms.some(function (t) { return t.term.kind === "summer"; });
     if (!hasSummer) head.appendChild(ghostButton("add-summer-btn", "Add summer"));
     if (canRemove) head.appendChild(ghostButton("remove-year-btn", "Remove year"));
@@ -662,16 +703,24 @@
     return section;
   }
 
+  // Terms without courses shrink to a single quiet line, so the four-year
+  // skeleton doesn't bury the terms that actually have something in them.
   function buildTermSection(t) {
-    var section = el("section", "semester-section" + (t.term.kind === "summer" ? " is-summer" : "") + collapsibleClass(t.term.id));
+    var empty = !t.courses.length;
+    var section = el("section", "semester-section" + (t.term.kind === "summer" ? " is-summer" : "") +
+      (empty ? " is-empty" : collapsibleClass(t.term.id)));
     section.dataset.term = t.term.id;
 
     var head = el("div", "semester-section-head");
-    var toggle = collapseToggle("button", "semester-name", t.term.id);
-    toggle.appendChild(el("span", null, t.name));
-    head.appendChild(toggle);
-    head.appendChild(el("span", "semester-section-meta", termMeta(t)));
-    if (t.term.kind === "summer" && !t.courses.length) head.appendChild(ghostButton("remove-summer-btn", "Remove summer"));
+    if (empty) {
+      head.appendChild(el("span", "semester-name", t.name));
+    } else {
+      var toggle = collapseToggle("semester-name", t.term.id);
+      toggle.appendChild(el("span", null, t.name));
+      head.appendChild(toggle);
+    }
+    head.appendChild(el("span", "semester-section-meta", empty ? "No courses" : termMeta(t)));
+    if (t.term.kind === "summer" && empty) head.appendChild(ghostButton("remove-summer-btn", "Remove"));
     head.appendChild(ghostButton("add-course-here-btn", "Add course"));
 
     section.appendChild(head);
@@ -679,18 +728,61 @@
     return section;
   }
 
-  function findCourse(id) {
-    return state.courses.filter(function (c) { return c.id === id; })[0];
+  // Patches everything in a course card that is derived from its data, so
+  // typing never re-renders the card (which would steal focus).
+  function updateCourseLive(courseEl, course) {
+    var r = computeCourse(course);
+    courseEl.querySelector(".course-name").textContent = courseTitle(course);
+    courseEl.querySelector(".course-credit-tag").textContent = creditsLabel(course.credit);
+    courseEl.querySelector(".course-percent").textContent = percentLabel(course, r);
+    var badge = courseEl.querySelector(".letter-badge");
+    badge.textContent = r.letter || "—";
+    badge.className = "badge letter-badge " + letterClass(r.letter);
+
+    courseEl.querySelector(".total-score").textContent = round2(r.totalScore);
+    courseEl.querySelector(".total-full").textContent = round2(r.totalFull);
+    courseEl.querySelector(".total-note").textContent = r.totalFull
+      ? round2(r.gradedFull) + " of " + round2(r.totalFull) + " pts graded" : "";
+    courseEl.querySelector(".scale-summary").textContent = scaleSummary(course);
+    courseEl.querySelector(".whatif-result").textContent = whatIfMessage(course, targetOf(course));
+
+    Array.prototype.forEach.call(courseEl.querySelectorAll(".items-list .items-row"), function (row) {
+      var score = row.querySelector(".item-score"), full = row.querySelector(".item-full");
+      var over = score.value !== "" && Number(score.value) > (Number(full.value) || 0);
+      score.classList.toggle("is-over", over);
+      score.title = over ? "Score is higher than the maximum" : "Leave blank if not graded yet";
+    });
+  }
+
+  // Year and term summaries on the Courses page, without rebuilding the list.
+  function updateSectionMeta() {
+    computeYears().forEach(function (y) {
+      var yearEl = document.querySelector('.year-section[data-year="' + y.year + '"]');
+      if (!yearEl) return;
+      yearEl.querySelector(".year-section-meta").textContent = y.courses.length ? statsMeta(y.stats) : "No courses";
+      y.terms.forEach(function (t) {
+        var section = yearEl.querySelector('.semester-section[data-term="' + t.term.id + '"]');
+        if (section) section.querySelector(".semester-section-meta").textContent = t.courses.length ? termMeta(t) : "No courses";
+      });
+    });
   }
 
   /* -------------------------------------------------------
      Rendering — Settings (GPA scale)
   ------------------------------------------------------- */
   function renderGpaScale() {
-    var wrap = document.getElementById("gpaScaleEditor");
-    var tpl = document.getElementById("gpaScaleRowTemplate");
+    var wrap = $("gpaScaleEditor");
+    var tpl = $("gpaScaleRowTemplate");
+    // Letters a course scale uses but Settings doesn't know would silently
+    // drop out of the GPA, so list them here to be given a point value.
+    var letters = Object.keys(state.gpaScale);
+    state.courses.forEach(function (c) {
+      sortedScale(c).forEach(function (row) {
+        if (letters.indexOf(row.letter) === -1) letters.push(row.letter);
+      });
+    });
     wrap.innerHTML = "";
-    Object.keys(state.gpaScale).forEach(function (letter) {
+    letters.forEach(function (letter) {
       var row = tpl.content.firstElementChild.cloneNode(true);
       row.querySelector(".gpa-scale-letter").textContent = letter;
       var input = row.querySelector(".gpa-scale-point");
@@ -713,61 +805,145 @@
     renderDashboard();
     renderCourses();
     renderGpaScale();
-    document.getElementById("creditsRequired").value = state.creditsRequired || "";
+    $("creditsRequired").value = state.creditsRequired || "";
   }
 
   /* -------------------------------------------------------
-     Event wiring — navigation
+     Navigation — the page lives in the URL hash, so reloading
+     or using Back keeps you where you were.
   ------------------------------------------------------- */
+  var PAGES = { dashboard: "Dashboard", courses: "Courses", settings: "Settings" };
+
+  function currentPage() {
+    var page = location.hash.replace("#", "");
+    return PAGES[page] ? page : "dashboard";
+  }
+
+  function showPage(page) {
+    document.querySelectorAll(".nav-item").forEach(function (b) {
+      var active = b.dataset.page === page;
+      b.classList.toggle("is-active", active);
+      if (active) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
+    });
+    document.querySelectorAll(".page").forEach(function (p) {
+      p.classList.toggle("is-active", p.id === "page-" + page);
+    });
+    $("pageTitle").textContent = PAGES[page];
+    $("addCourseBtn").hidden = page !== "courses";
+    if (page === "settings") renderGpaScale();
+    closeMenu();
+  }
+
+  function go(page) {
+    if (currentPage() === page) { showPage(page); return; }
+    location.hash = page; // triggers hashchange → showPage
+  }
+
+  function closeMenu() {
+    $("sidebar").classList.remove("is-open");
+    $("scrim").classList.remove("is-visible");
+    $("menuBtn").setAttribute("aria-expanded", "false");
+  }
+
   function setupNav() {
-    var navItems = document.querySelectorAll(".nav-item");
-    var pageTitle = document.getElementById("pageTitle");
-    var titles = { dashboard: "Dashboard", courses: "Courses", settings: "Settings" };
-
-    navItems.forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        navItems.forEach(function (b) { b.classList.remove("is-active"); });
-        btn.classList.add("is-active");
-        document.querySelectorAll(".page").forEach(function (p) { p.classList.remove("is-active"); });
-        document.getElementById("page-" + btn.dataset.page).classList.add("is-active");
-        pageTitle.textContent = titles[btn.dataset.page];
-        document.querySelector(".sidebar").classList.remove("is-open");
-      });
+    document.querySelectorAll(".nav-item").forEach(function (btn) {
+      btn.addEventListener("click", function () { go(btn.dataset.page); });
+    });
+    window.addEventListener("hashchange", function () {
+      showPage(currentPage());
+      window.scrollTo(0, 0);
     });
 
-    document.getElementById("menuBtn").addEventListener("click", function () {
-      document.querySelector(".sidebar").classList.toggle("is-open");
+    $("menuBtn").addEventListener("click", function () {
+      var open = $("sidebar").classList.toggle("is-open");
+      $("scrim").classList.toggle("is-visible", open);
+      $("menuBtn").setAttribute("aria-expanded", open ? "true" : "false");
     });
+    $("scrim").addEventListener("click", closeMenu);
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeMenu(); });
+
+    $("standingList").addEventListener("click", function (e) {
+      var row = e.target.closest(".standing-row");
+      if (row) revealCourse(row.dataset.id, false);
+    });
+
+    showPage(currentPage());
+  }
+
+  // Shows a course on the Courses page: unfolds its year and term, opens the
+  // card and scrolls to it.
+  function revealCourse(id, focusName) {
+    var course = findCourse(id);
+    if (!course) return;
+    var term = state.terms.filter(function (t) { return t.id === course.termId; })[0];
+    if (term) {
+      delete collapsed["y" + term.year];
+      delete collapsed[term.id];
+      saveCollapsed();
+    }
+    go("courses");
+    renderCourses();
+    renderDashboard();
+    var node = document.querySelector('.course[data-id="' + id + '"]');
+    if (!node) return;
+    setOpen(node, true);
+    node.scrollIntoView({ block: "start" });
+    if (focusName) {
+      var input = node.querySelector(".course-name-input");
+      input.focus();
+      input.select();
+    }
   }
 
   /* -------------------------------------------------------
-     Event wiring — theme
+     Theme
   ------------------------------------------------------- */
   function setupTheme() {
     var THEME_KEY = "ledger-theme";
     var saved = null;
-    try { saved = localStorage.getItem(THEME_KEY); } catch (e) {}
+    try { saved = localStorage.getItem(THEME_KEY); } catch (e) { /* ignore */ }
     var prefersLight = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches;
-    var theme = saved || (prefersLight ? "light" : "dark");
+    var theme = saved === "light" || saved === "dark" ? saved : (prefersLight ? "light" : "dark");
     applyTheme(theme);
 
-    document.getElementById("themeToggle").addEventListener("click", function () {
+    $("themeToggle").addEventListener("click", function () {
       theme = theme === "dark" ? "light" : "dark";
       applyTheme(theme);
-      try { localStorage.setItem(THEME_KEY, theme); } catch (e) {}
+      try { localStorage.setItem(THEME_KEY, theme); } catch (e) { /* ignore */ }
     });
 
     function applyTheme(t) {
       document.body.setAttribute("data-theme", t);
-      document.getElementById("themeToggleLabel").textContent = t === "dark" ? "Dark mode" : "Light mode";
+      $("themeToggleLabel").textContent = t === "dark" ? "Dark mode" : "Light mode";
+      $("themeToggle").setAttribute("aria-pressed", t === "dark" ? "true" : "false");
+      var meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute("content", t === "dark" ? "#171310" : "#EFEBE2");
     }
   }
 
   /* -------------------------------------------------------
      Event wiring — courses page (delegated)
   ------------------------------------------------------- */
+  var DEFAULT_SCALE = [
+    { cutoff: 0, letter: "F" }, { cutoff: 50, letter: "D" }, { cutoff: 55, letter: "D+" },
+    { cutoff: 60, letter: "C" }, { cutoff: 65, letter: "C+" }, { cutoff: 70, letter: "B" },
+    { cutoff: 75, letter: "B+" }, { cutoff: 80, letter: "A" }
+  ];
+
   function setupCoursesPage() {
-    var wrap = document.getElementById("courseAccordion");
+    var wrap = $("courseAccordion");
+
+    function rerender() {
+      saveState();
+      renderCourses();
+      renderDashboard();
+    }
+
+    function focusIn(courseId, selector) {
+      var nodes = wrap.querySelectorAll('.course[data-id="' + courseId + '"] ' + selector);
+      var node = nodes[nodes.length - 1];
+      if (node) { node.focus(); if (node.select) node.select(); }
+    }
 
     wrap.addEventListener("click", function (e) {
       var addHere = e.target.closest(".add-course-here-btn");
@@ -784,7 +960,8 @@
         return;
       }
       if (e.target.closest(".remove-summer-btn")) {
-        removeTerms(function (t) { return t.id === e.target.closest(".semester-section").dataset.term; });
+        var doomedTerm = e.target.closest(".semester-section").dataset.term;
+        removeTerms(function (t) { return t.id === doomedTerm; });
         return;
       }
       if (e.target.closest(".remove-year-btn")) {
@@ -793,135 +970,99 @@
         return;
       }
 
-      var summary = e.target.closest(".course-summary");
       var courseEl = e.target.closest(".course");
       if (!courseEl) return;
       var id = courseEl.dataset.id;
       var course = findCourse(id);
+      if (!course) return;
 
-      if (summary && !e.target.closest(".course-name-input")) {
-        courseEl.classList.toggle("is-open");
+      if (e.target.closest(".course-summary")) {
+        setOpen(courseEl, !courseEl.classList.contains("is-open"));
         return;
       }
 
       if (e.target.closest(".delete-course-btn")) {
         var cIdx = state.courses.indexOf(course);
-        state.courses = state.courses.filter(function (c) { return c.id !== id; });
+        state.courses.splice(cIdx, 1);
         saveState();
         renderAll();
-        showToast('"' + course.name + '" removed', function () {
+        showToast('"' + courseTitle(course) + '" removed', function () {
           state.courses.splice(cIdx, 0, course);
           saveState();
           renderAll();
+          revealCourse(id, false);
         });
         return;
       }
 
       if (e.target.closest(".add-item-btn")) {
-        course.items.push({ id: uid(), name: "New item", score: null, full: 0 });
-        saveState();
-        renderCourses();
-        reopen(id);
+        course.items.push({ id: uid(), name: "", score: null, full: 0 });
+        rerender();
+        focusIn(id, ".items-list .item-name");
         return;
       }
 
       if (e.target.closest(".row-remove") && e.target.closest(".items-list")) {
-        var itemRow = e.target.closest(".items-row");
-        var itemId = itemRow.dataset.itemId;
+        var itemId = e.target.closest(".items-row").dataset.itemId;
         var removedItem = course.items.filter(function (it) { return it.id === itemId; })[0];
+        if (!removedItem) return;
         var iIdx = course.items.indexOf(removedItem);
-        course.items = course.items.filter(function (it) { return it.id !== itemId; });
-        saveState();
-        renderCourses();
-        renderDashboard();
-        reopen(id);
-        showToast('"' + removedItem.name + '" removed', function () {
+        course.items.splice(iIdx, 1);
+        rerender();
+        showToast('"' + (removedItem.name || "Item") + '" removed', function () {
           course.items.splice(iIdx, 0, removedItem);
-          saveState();
-          renderCourses();
-          renderDashboard();
-          reopen(id);
+          rerender();
         });
         return;
       }
 
       if (e.target.closest(".add-cutoff-btn")) {
-        course.scale.push({ cutoff: 0, letter: "F" });
-        saveState();
-        renderCourses();
-        reopen(id);
+        // Start the new row just above the current top grade, letter blank;
+        // a row without a letter is ignored until it is filled in.
+        var top = course.scale.reduce(function (m, s) { return Math.max(m, Number(s.cutoff) || 0); }, -5);
+        course.scale.push({ cutoff: Math.min(100, top + 5), letter: "" });
+        rerender();
+        focusIn(id, ".scale-list .scale-letter");
         return;
       }
 
       if (e.target.closest(".row-remove") && e.target.closest(".scale-list")) {
-        var scaleRow = e.target.closest(".scale-row");
-        scaleRow.remove();
+        e.target.closest(".scale-row").remove();
         rebuildScaleFromDom(courseEl, course);
-        saveState();
-        renderCourses();
-        reopen(id);
+        rerender();
         return;
-      }
-    });
-
-    wrap.addEventListener("keydown", function (e) {
-      if (e.target.classList.contains("course-summary") && (e.key === "Enter" || e.key === " ")) {
-        e.preventDefault();
-        e.target.closest(".course").classList.toggle("is-open");
       }
     });
 
     wrap.addEventListener("input", function (e) {
       var courseEl = e.target.closest(".course");
       if (!courseEl) return;
-      var id = courseEl.dataset.id;
-      var course = findCourse(id);
+      var course = findCourse(courseEl.dataset.id);
+      if (!course) return;
+      var cl = e.target.classList;
 
-      if (e.target.classList.contains("course-name-input")) {
+      if (cl.contains("course-name-input")) {
         course.name = e.target.value;
-        saveState();
-        renderDashboard();
-        return;
-      }
-      if (e.target.classList.contains("credit-input")) {
-        course.credit = e.target.value === "" ? 0 : Number(e.target.value);
-        saveState();
-        var creditNum = courseEl.querySelector(".credit-num");
-        if (creditNum) creditNum.textContent = course.credit;
-        updateCourseLiveTotals(courseEl, course);
-        renderDashboard();
-        return;
-      }
-      if (e.target.classList.contains("whatif-target")) {
-        var target = Number(e.target.value) || 0;
-        courseEl.querySelector(".whatif-result").textContent = whatIfMessage(course, target);
-        return;
-      }
-      if (e.target.classList.contains("item-name")) {
+      } else if (cl.contains("credit-input")) {
+        course.credit = Math.max(0, Number(e.target.value) || 0);
+      } else if (cl.contains("whatif-target")) {
+        course.target = Number(e.target.value) || 0;
+      } else if (cl.contains("item-name") || cl.contains("item-score") || cl.contains("item-full")) {
         var row = e.target.closest(".items-row");
         var item = course.items.filter(function (it) { return it.id === row.dataset.itemId; })[0];
-        if (item) { item.name = e.target.value; saveState(); }
-        return;
-      }
-      if (e.target.classList.contains("item-score") || e.target.classList.contains("item-full")) {
-        var row2 = e.target.closest(".items-row");
-        var item2 = course.items.filter(function (it) { return it.id === row2.dataset.itemId; })[0];
-        if (item2) {
-          if (e.target.classList.contains("item-score")) item2.score = e.target.value === "" ? null : Number(e.target.value) || 0;
-          item2.full = e.target.classList.contains("item-full") ? Number(e.target.value) || 0 : item2.full;
-          saveState();
-          updateCourseLiveTotals(courseEl, course);
-          renderDashboard();
-        }
-        return;
-      }
-      if (e.target.classList.contains("scale-cutoff") || e.target.classList.contains("scale-letter")) {
+        if (!item) return;
+        if (cl.contains("item-name")) item.name = e.target.value;
+        if (cl.contains("item-score")) item.score = e.target.value === "" ? null : Number(e.target.value) || 0;
+        if (cl.contains("item-full")) item.full = Math.max(0, Number(e.target.value) || 0);
+      } else if (cl.contains("scale-cutoff") || cl.contains("scale-letter")) {
         rebuildScaleFromDom(courseEl, course);
-        saveState();
-        updateCourseLiveBadge(courseEl, course);
-        renderDashboard();
+      } else {
         return;
       }
+      saveState();
+      updateCourseLive(courseEl, course);
+      updateSectionMeta();
+      renderDashboard();
     });
 
     wrap.addEventListener("change", function (e) {
@@ -929,30 +1070,31 @@
       if (!courseEl) return;
       var id = courseEl.dataset.id;
       var course = findCourse(id);
-      if (e.target.classList.contains("kind-select")) {
+      if (!course) return;
+      var cl = e.target.classList;
+
+      if (cl.contains("kind-select")) {
         course.kind = e.target.value;
-        saveState();
-        renderCourses();
-        reopen(id);
-        renderDashboard();
-      }
-      if (e.target.classList.contains("withdrawn-input")) {
+        rerender();
+        focusIn(id, ".kind-select");
+      } else if (cl.contains("withdrawn-input")) {
         course.withdrawn = e.target.checked;
-        saveState();
-        renderCourses();
-        reopen(id);
-        renderDashboard();
-      }
-      if (e.target.classList.contains("term-select")) {
+        rerender();
+        focusIn(id, ".withdrawn-input");
+      } else if (cl.contains("term-select")) {
         course.termId = e.target.value;
         saveState();
-        renderCourses();
-        reopen(id);
-        renderDashboard();
+        revealCourse(id, false);
       }
     });
 
-    document.getElementById("addCourseBtn").addEventListener("click", function () {
+    // The page's main action adds to the semester you're currently in.
+    $("addCourseBtn").addEventListener("click", function () {
+      var current = currentTerm();
+      addCourse(current ? current.term.id : state.terms[0].id);
+    });
+
+    $("addYearBtn").addEventListener("click", function () {
       var year = addYear(state);
       saveState();
       renderAll();
@@ -973,90 +1115,57 @@
     function addCourse(termIdValue) {
       var id = uid();
       state.courses.push({
-        id: id, name: "New course", credit: 3, kind: "graded",
+        id: id, name: "", credit: 3, kind: "graded",
         termId: termIdValue,
-        items: [{ id: uid(), name: "Assignment 1", score: null, full: 100 }],
-        scale: [ {cutoff:0,letter:"F"},{cutoff:50,letter:"D"},{cutoff:55,letter:"D+"},{cutoff:60,letter:"C"},{cutoff:65,letter:"C+"},{cutoff:70,letter:"B"},{cutoff:75,letter:"B+"},{cutoff:80,letter:"A"} ]
+        items: [{ id: uid(), name: "Midterm", score: null, full: 50 }, { id: uid(), name: "Final", score: null, full: 50 }],
+        scale: JSON.parse(JSON.stringify(DEFAULT_SCALE))
       });
       saveState();
-      renderCourses();
-      renderDashboard();
-      reopen(id);
-      var el = wrap.querySelector('.course[data-id="' + id + '"] .course-name-input');
-      if (el) { el.focus(); el.select(); }
+      revealCourse(id, true);
     }
   }
 
-  var pendingUndo = null, toastTimer2 = null;
-  function showToast(message, undoFn) {
-    pendingUndo = undoFn;
-    var toast = document.getElementById("toast");
-    toast.querySelector(".toast-msg").textContent = message;
-    toast.classList.add("is-visible");
-    clearTimeout(toastTimer2);
-    toastTimer2 = setTimeout(function () {
-      toast.classList.remove("is-visible");
-      pendingUndo = null;
-    }, 6000);
-  }
-
-  function reopen(id) {
-    var el = document.querySelector('.course[data-id="' + id + '"]');
-    if (el) el.classList.add("is-open");
-  }
-
   function rebuildScaleFromDom(courseEl, course) {
-    var rows = courseEl.querySelectorAll(".scale-list .scale-row");
     var scale = [];
-    rows.forEach(function (row) {
-      var cutoff = Number(row.querySelector(".scale-cutoff").value) || 0;
-      var letter = (row.querySelector(".scale-letter").value || "").trim() || "F";
-      scale.push({ cutoff: cutoff, letter: letter });
+    courseEl.querySelectorAll(".scale-list .scale-row").forEach(function (row) {
+      scale.push({
+        cutoff: Number(row.querySelector(".scale-cutoff").value) || 0,
+        letter: (row.querySelector(".scale-letter").value || "").trim()
+      });
     });
     course.scale = scale;
   }
 
-  // Lightweight DOM patch for the fields that change on every keystroke,
-  // so the whole accordion doesn't re-render (and lose focus) while typing.
-  function updateCourseLiveTotals(courseEl, course) {
-    var r = computeCourse(course);
-    courseEl.querySelector(".total-score").textContent = round2(r.totalScore);
-    courseEl.querySelector(".total-full").textContent = round2(r.totalFull);
-    courseEl.querySelector(".course-percent").textContent = percentLabel(course, r);
-    var badge = courseEl.querySelector(".letter-badge");
-    badge.textContent = r.letter || "—";
-    badge.className = "badge letter-badge " + letterClass(r.letter);
-    var targetInput = courseEl.querySelector(".whatif-target");
-    var whatifOut = courseEl.querySelector(".whatif-result");
-    if (targetInput && whatifOut) whatifOut.textContent = whatIfMessage(course, Number(targetInput.value) || 80);
-
-    var section = courseEl.closest(".semester-section");
-    var yearEl = courseEl.closest(".year-section");
-    if (section && yearEl) {
-      computeYears().forEach(function (y) {
-        if (String(y.year) !== yearEl.dataset.year) return;
-        yearEl.querySelector(".year-section-meta").textContent = statsMeta(y.stats);
-        y.terms.forEach(function (t) {
-          if (t.term.id === section.dataset.term) section.querySelector(".semester-section-meta").textContent = termMeta(t);
-        });
-      });
-    }
+  /* -------------------------------------------------------
+     Toast
+  ------------------------------------------------------- */
+  var pendingUndo = null, toastTimer = null;
+  function showToast(message, undoFn) {
+    pendingUndo = undoFn || null;
+    var toast = $("toast");
+    toast.querySelector(".toast-msg").textContent = message;
+    $("toastUndo").hidden = !undoFn;
+    toast.classList.add("is-visible");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(hideToast, undoFn ? 8000 : 4000);
   }
-  function updateCourseLiveBadge(courseEl, course) {
-    updateCourseLiveTotals(courseEl, course);
+
+  function hideToast() {
+    $("toast").classList.remove("is-visible");
+    pendingUndo = null;
   }
 
   /* -------------------------------------------------------
      Event wiring — settings / data
   ------------------------------------------------------- */
   function setupSettings() {
-    document.getElementById("creditsRequired").addEventListener("input", function (e) {
+    $("creditsRequired").addEventListener("input", function (e) {
       state.creditsRequired = Number(e.target.value) > 0 ? Number(e.target.value) : null;
       saveState();
       renderDashboard();
     });
 
-    document.getElementById("exportBtn").addEventListener("click", function () {
+    $("exportBtn").addEventListener("click", function () {
       var blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
       var url = URL.createObjectURL(blob);
       var a = document.createElement("a");
@@ -1068,59 +1177,68 @@
       URL.revokeObjectURL(url);
     });
 
-    document.getElementById("importInput").addEventListener("change", function (e) {
+    // Replaces all data, keeping the previous data around for one Undo.
+    function replaceState(next, message) {
+      var previous = state;
+      state = next;
+      saveState();
+      renderAll();
+      showToast(message, function () {
+        state = previous;
+        saveState();
+        renderAll();
+      });
+    }
+
+    $("importBtn").addEventListener("click", function () { $("importInput").click(); });
+    $("importInput").addEventListener("change", function (e) {
       var file = e.target.files[0];
       if (!file) return;
       var reader = new FileReader();
       reader.onload = function () {
+        var next = null;
         try {
           var parsed = JSON.parse(reader.result);
-          if (!parsed.courses || !parsed.gpaScale) throw new Error("bad shape");
-          state = migrate(parsed);
-          saveState();
-          renderAll();
-        } catch (err) {
-          alert("That file doesn't look like a Ledger backup.");
-        }
+          if (parsed && Array.isArray(parsed.courses)) next = migrate(parsed);
+        } catch (err) { next = null; }
+        if (next) replaceState(next, "Backup imported");
+        else showToast("That file doesn't look like a Ledger backup.");
       };
       reader.readAsText(file);
       e.target.value = "";
     });
 
-    document.getElementById("resetBtn").addEventListener("click", function () {
-      if (confirm("Reset all data back to the original sample courses? Your current data will be lost unless you've exported a backup.")) {
-        state = migrate(JSON.parse(JSON.stringify(SEED_DATA)));
-        saveState();
-        renderAll();
+    $("resetBtn").addEventListener("click", function () {
+      if (confirm("Replace all your data with the original sample courses?")) {
+        replaceState(migrate(JSON.parse(JSON.stringify(SEED_DATA))), "Reset to sample data");
       }
+    });
+
+    $("printBtn").addEventListener("click", function () {
+      window.print();
     });
   }
 
   /* -------------------------------------------------------
-     Init
+     Init — the script sits at the end of <body>, so the DOM is ready.
   ------------------------------------------------------- */
-  document.addEventListener("DOMContentLoaded", function () {
-    state = loadState();
-    setupNav();
-    setupTheme();
-    setupCoursesPage();
-    setupCollapsing();
-    setupSettings();
-    renderAll();
+  state = loadState();
+  setupTheme();
+  setupCoursesPage();
+  setupCollapsing();
+  setupSettings();
+  renderAll();
+  setupNav();
 
-    document.getElementById("toastUndo").addEventListener("click", function () {
-      if (pendingUndo) { pendingUndo(); pendingUndo = null; }
-      document.getElementById("toast").classList.remove("is-visible");
-    });
-
-    document.getElementById("printBtn").addEventListener("click", function () {
-      window.print();
-    });
-
-    if ("serviceWorker" in navigator) {
-      window.addEventListener("load", function () {
-        navigator.serviceWorker.register("sw.js").catch(function () {});
-      });
-    }
+  $("toastUndo").addEventListener("click", function () {
+    var undo = pendingUndo;
+    hideToast();
+    if (undo) undo();
   });
+
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("sw.js").catch(function () { /* offline support is optional */ });
+    });
+  }
 })();
