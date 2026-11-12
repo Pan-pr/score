@@ -693,24 +693,75 @@ body[data-theme="light"] .theme-toggle-dot {
   border-bottom: 1px solid var(--hairline-strong);
 }
 
-.semester-name-input {
-  flex: 1 1 160px;
-  min-width: 0;
-  border: none;
-  background: none;
+.semester-name {
+  flex: 1 1 auto;
   font-family: var(--font-display);
-  font-size: 17px;
+  font-size: 16px;
   color: var(--brass);
-  padding: 4px 6px;
-  margin-left: -6px;
-  border-radius: var(--radius-sm);
 }
-.semester-name-input:hover, .semester-name-input:focus { background: var(--hairline); outline: none; }
+.semester-section.is-summer .semester-name { font-style: italic; }
 
 .semester-section-meta { font-size: 13px; color: var(--ink-muted); white-space: nowrap; }
 
 .semester-list .course-accordion { border-top: none; }
-.field .semester-input { width: 170px; }
+.field .term-select { width: 190px; }
+
+.term-empty { padding: 14px 4px; font-size: 13px; color: var(--ink-faint); margin: 0; }
+
+/* Year sections (Courses page) */
+.year-section { margin-bottom: 48px; }
+.year-section:last-child { margin-bottom: 0; }
+
+.year-section-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding-bottom: 12px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid var(--hairline-strong);
+}
+
+.year-toggle {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-display);
+  font-size: 21px;
+  color: var(--ink);
+}
+.year-section.is-collapsed .year-toggle .chevron { transform: rotate(-90deg); }
+.year-section.is-collapsed .year-terms { display: none; }
+.year-section.is-collapsed .year-section-head { margin-bottom: 0; }
+
+.year-section-meta { font-size: 13px; color: var(--ink-muted); white-space: nowrap; }
+
+.year-terms > .semester-section { margin-bottom: 28px; }
+.year-terms > .semester-section:last-child { margin-bottom: 0; }
+
+/* Year headings (Dashboard) */
+.year-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 36px 4px 8px;
+  font-family: var(--font-display);
+  font-size: 19px;
+  color: var(--ink);
+  border-bottom: 2px solid var(--hairline-strong);
+}
+.year-header:first-child { padding-top: 4px; }
+.year-header > span:last-child { font-family: var(--font-body); font-size: 13px; color: var(--ink-muted); }
+
+.degree-settings { margin-bottom: 36px; }
+.degree-settings .field input { width: 160px; }
 
 /* Withdrawn courses */
 .field-check { flex-direction: row; align-items: center; gap: 8px; padding-bottom: 8px; cursor: pointer; }

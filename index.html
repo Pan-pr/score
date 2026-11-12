@@ -84,7 +84,7 @@
 
         <div class="section-head">
           <h2>Course standing</h2>
-          <p>Live percentage and letter grade for every course, grouped by semester.</p>
+          <p>Live percentage and letter grade for every course, grouped by year and term. GPAX is your cumulative GPA up to that term.</p>
         </div>
 
         <div class="standing-list" id="standingList"></div>
@@ -96,9 +96,9 @@
         <div class="section-head with-action">
           <div>
             <h2>Courses</h2>
-            <p>Edit scores, credits, and grading scales. Click a semester's name to rename it. Everything saves as you type.</p>
+            <p>Four years of Semester 1 and 2, with an optional summer each year. Edit scores, credits, and grading scales; everything saves as you type.</p>
           </div>
-          <button class="btn btn-primary" id="addCourseBtn">Add semester</button>
+          <button class="btn btn-primary" id="addCourseBtn">Add year</button>
         </div>
 
         <div class="semester-list" id="courseAccordion"></div>
@@ -111,6 +111,17 @@
           <p>The point value assigned to each letter grade when computing GPA. Leave a value blank for grades that don't count toward GPA, like S or U.</p>
         </div>
         <div class="scale-editor" id="gpaScaleEditor"></div>
+
+        <div class="section-head">
+          <h2>Degree</h2>
+          <p>Total credits your program requires. When set, the dashboard shows credits earned out of this number.</p>
+        </div>
+        <div class="degree-settings">
+          <label class="field">
+            <span>Credits required to graduate</span>
+            <input type="number" id="creditsRequired" min="0" step="1" placeholder="e.g. 146">
+          </label>
+        </div>
 
         <div class="section-head">
           <h2>Data</h2>
@@ -150,8 +161,8 @@
             <input type="number" class="credit-input" min="0" step="1">
           </label>
           <label class="field">
-            <span>Semester</span>
-            <input type="text" class="semester-input" list="semesterOptions">
+            <span>Term</span>
+            <select class="term-select"></select>
           </label>
           <label class="field">
             <span>Type</span>
@@ -216,7 +227,6 @@
     </article>
   </template>
 
-  <datalist id="semesterOptions"></datalist>
 
   <!-- Item row template -->
   <template id="itemRowTemplate">
