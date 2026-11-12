@@ -638,7 +638,6 @@ body[data-theme="light"] .theme-toggle-dot {
   border-bottom: 1px solid var(--hairline);
   margin-bottom: 4px;
 }
-.semester-header:first-child { padding-top: 4px; }
 
 .whatif-block { margin-top: 28px; }
 
@@ -757,8 +756,39 @@ body[data-theme="light"] .theme-toggle-dot {
   color: var(--ink);
   border-bottom: 2px solid var(--hairline-strong);
 }
-.year-header:first-child { padding-top: 4px; }
-.year-header > span:last-child { font-family: var(--font-body); font-size: 13px; color: var(--ink-muted); }
+.dash-year:first-child .year-header { padding-top: 4px; }
+
+/* Collapsible headers */
+.year-header.collapse-toggle, .semester-header.collapse-toggle {
+  width: 100%;
+  background: none;
+  border-top: 0;
+  border-left: 0;
+  border-right: 0;
+  cursor: pointer;
+  text-align: left;
+}
+.header-title { display: inline-flex; align-items: center; gap: 8px; }
+.header-meta { font-family: var(--font-body); font-size: 13px; color: var(--ink-muted); text-align: right; }
+.semester-header .header-meta { font-size: 12.5px; }
+.collapse-toggle .chevron { flex: none; }
+.collapsible.is-collapsed > .collapse-body { display: none; }
+.collapsible.is-collapsed > .collapse-toggle .chevron,
+.collapsible.is-collapsed > div > .collapse-toggle .chevron { transform: rotate(-90deg); }
+
+.semester-name.collapse-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+.semester-section.is-collapsed .semester-section-head { border-bottom-color: var(--hairline); }
+
+.hero-stat-sub { margin-top: 4px !important; font-family: var(--font-body) !important; font-size: 12px !important; color: var(--ink-muted); }
 
 .degree-settings { margin-bottom: 36px; }
 .degree-settings .field input { width: 160px; }
@@ -779,6 +809,8 @@ body[data-theme="light"] .theme-toggle-dot {
   .main { padding: 0; }
   body { background: #fff; color: #111; }
   .standing-bar-track, .hairline { background: #ddd; }
+  .collapsible.is-collapsed > .collapse-body { display: block !important; }
+  .collapse-toggle .chevron { display: none; }
 }
 
 /* ---------------------------------------------------------
