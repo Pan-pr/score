@@ -384,9 +384,13 @@
 
     document.getElementById("statCredits").textContent = overall.earnedCredits +
       (state.creditsRequired ? " / " + state.creditsRequired : "");
-    document.getElementById("statCourses").textContent = state.courses.length;
+    // The current semester is the latest term that has any courses in it.
+    var activeTerms = computeTerms().filter(function (t) { return t.courses.length; });
+    var current = activeTerms[activeTerms.length - 1];
+    document.getElementById("statTermGpa").textContent = current && current.stats.hasGpa ? current.stats.gpa.toFixed(2) : "—";
+    document.getElementById("statTermLabel").textContent = current ? termLabel(current.term) : "No courses yet";
 
-    var results = state.courses.map(function (c) {
+    var results = (current ? current.courses : []).map(function (c) {
       return { course: c, r: computeCourse(c) };
     });
     var graded = results.filter(function (x) { return x.course.kind !== "satisfactory" && !x.course.withdrawn && x.r.hasGrades; });
@@ -413,24 +417,31 @@
       list.appendChild(empty);
     }
     years.forEach(function (y) {
-      list.appendChild(headerRow("year-header", "Year " + y.year, statsMeta(y.stats)));
+      var key = "y" + y.year;
+      var yearBlock = el("div", "dash-year" + collapsibleClass(key));
+      yearBlock.appendChild(headerRow("year-header", key, "Year " + y.year, statsMeta(y.stats)));
+      var yearBody = el("div", "collapse-body");
       y.terms.forEach(function (t) {
         if (!t.courses.length) return;
-        list.appendChild(headerRow("semester-header", t.name, termMeta(t)));
-        t.courses.forEach(function (course) { list.appendChild(buildStandingRow(course)); });
+        var termBlock = el("div", "dash-term" + collapsibleClass(t.term.id));
+        termBlock.appendChild(headerRow("semester-header", t.term.id, t.name, termMeta(t)));
+        var rows = el("div", "collapse-body");
+        t.courses.forEach(function (course) { rows.appendChild(buildStandingRow(course)); });
+        termBlock.appendChild(rows);
+        yearBody.appendChild(termBlock);
       });
+      yearBlock.appendChild(yearBody);
+      list.appendChild(yearBlock);
     });
   }
 
-  function headerRow(className, title, meta) {
-    var head = document.createElement("div");
-    head.className = className;
-    var nameSpan = document.createElement("span");
-    nameSpan.textContent = title;
-    var metaSpan = document.createElement("span");
-    metaSpan.textContent = meta;
+  function headerRow(className, key, title, meta) {
+    var head = collapseToggle("button", className, key);
+    var nameSpan = el("span", "header-title");
+    nameSpan.appendChild(head.firstChild); // chevron
+    nameSpan.appendChild(document.createTextNode(title));
     head.appendChild(nameSpan);
-    head.appendChild(metaSpan);
+    head.appendChild(el("span", "header-meta", meta));
     return head;
   }
 
@@ -483,7 +494,44 @@
   /* -------------------------------------------------------
      Rendering — Courses
   ------------------------------------------------------- */
-  var collapsedYears = {};
+  /* -------------------------------------------------------
+     Collapsing years and terms. Keys are "y1" for a year and the
+     term id ("y1-1", "y1-summer") for a term; the same key folds
+     the matching block on both the Dashboard and Courses pages.
+  ------------------------------------------------------- */
+  var COLLAPSE_KEY = "ledger-collapsed";
+  var CHEVRON_SVG = '<svg class="chevron" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var collapsed = {};
+  try { collapsed = JSON.parse(localStorage.getItem(COLLAPSE_KEY)) || {}; } catch (e) { collapsed = {}; }
+
+  function collapseToggle(tag, className, key) {
+    var btn = el(tag, className + " collapse-toggle");
+    btn.type = "button";
+    btn.dataset.key = key;
+    btn.setAttribute("aria-expanded", collapsed[key] ? "false" : "true");
+    btn.innerHTML = CHEVRON_SVG;
+    return btn;
+  }
+
+  function collapsibleClass(key) {
+    return " collapsible" + (collapsed[key] ? " is-collapsed" : "");
+  }
+
+  function setupCollapsing() {
+    document.addEventListener("click", function (e) {
+      var toggle = e.target.closest(".collapse-toggle");
+      if (!toggle) return;
+      var key = toggle.dataset.key;
+      collapsed[key] = !collapsed[key];
+      if (!collapsed[key]) delete collapsed[key];
+      try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(collapsed)); } catch (err) {}
+      document.querySelectorAll('.collapse-toggle[data-key="' + key + '"]').forEach(function (t) {
+        t.closest(".collapsible").classList.toggle("is-collapsed", !!collapsed[key]);
+        t.setAttribute("aria-expanded", collapsed[key] ? "false" : "true");
+      });
+    });
+  }
+
 
   function renderCourses() {
     var wrap = document.getElementById("courseAccordion");
@@ -597,14 +645,11 @@
   }
 
   function buildYearSection(y, canRemove) {
-    var section = el("section", "year-section" + (collapsedYears[y.year] ? " is-collapsed" : ""));
+    var section = el("section", "year-section" + collapsibleClass("y" + y.year));
     section.dataset.year = y.year;
 
     var head = el("div", "year-section-head");
-    var toggle = el("button", "year-toggle");
-    toggle.type = "button";
-    toggle.setAttribute("aria-expanded", collapsedYears[y.year] ? "false" : "true");
-    toggle.innerHTML = '<svg class="chevron" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    var toggle = collapseToggle("button", "year-toggle", "y" + y.year);
     toggle.appendChild(el("span", null, "Year " + y.year));
     head.appendChild(toggle);
     head.appendChild(el("span", "year-section-meta", statsMeta(y.stats)));
@@ -613,22 +658,24 @@
     if (canRemove) head.appendChild(ghostButton("remove-year-btn", "Remove year"));
 
     section.appendChild(head);
-    section.appendChild(el("div", "year-terms"));
+    section.appendChild(el("div", "year-terms collapse-body"));
     return section;
   }
 
   function buildTermSection(t) {
-    var section = el("section", "semester-section" + (t.term.kind === "summer" ? " is-summer" : ""));
+    var section = el("section", "semester-section" + (t.term.kind === "summer" ? " is-summer" : "") + collapsibleClass(t.term.id));
     section.dataset.term = t.term.id;
 
     var head = el("div", "semester-section-head");
-    head.appendChild(el("span", "semester-name", t.name));
+    var toggle = collapseToggle("button", "semester-name", t.term.id);
+    toggle.appendChild(el("span", null, t.name));
+    head.appendChild(toggle);
     head.appendChild(el("span", "semester-section-meta", termMeta(t)));
     if (t.term.kind === "summer" && !t.courses.length) head.appendChild(ghostButton("remove-summer-btn", "Remove summer"));
     head.appendChild(ghostButton("add-course-here-btn", "Add course"));
 
     section.appendChild(head);
-    section.appendChild(el("div", "course-accordion"));
+    section.appendChild(el("div", "course-accordion collapse-body"));
     return section;
   }
 
@@ -730,13 +777,6 @@
       }
 
       var yearEl = e.target.closest(".year-section");
-      if (e.target.closest(".year-toggle")) {
-        var yr = Number(yearEl.dataset.year);
-        collapsedYears[yr] = !collapsedYears[yr];
-        yearEl.classList.toggle("is-collapsed", collapsedYears[yr]);
-        e.target.closest(".year-toggle").setAttribute("aria-expanded", collapsedYears[yr] ? "false" : "true");
-        return;
-      }
       if (e.target.closest(".add-summer-btn")) {
         ensureTerm(state, Number(yearEl.dataset.year), "summer");
         saveState();
@@ -1064,6 +1104,7 @@
     setupNav();
     setupTheme();
     setupCoursesPage();
+    setupCollapsing();
     setupSettings();
     renderAll();
 
