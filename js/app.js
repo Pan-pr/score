@@ -131,7 +131,9 @@
     var hasGrades = gradedFull > 0;
 
     var letter = null;
-    if (course.kind === "satisfactory") {
+    if (course.withdrawn) {
+      letter = "W";
+    } else if (course.kind === "satisfactory") {
       letter = "S";
     } else if (hasGrades && course.scale && course.scale.length) {
       var sorted = course.scale.slice().sort(function (a, b) { return a.cutoff - b.cutoff; });
@@ -142,7 +144,7 @@
     }
 
     var gpaPoint = null;
-    if (letter && state.gpaScale && Object.prototype.hasOwnProperty.call(state.gpaScale, letter)) {
+    if (letter && letter !== "W" && state.gpaScale && Object.prototype.hasOwnProperty.call(state.gpaScale, letter)) {
       var v = state.gpaScale[letter];
       gpaPoint = (v === null || v === "" || v === undefined) ? null : Number(v);
     }
@@ -159,35 +161,50 @@
   }
 
   function computeOverall() {
-    var totalCredits = 0, qualityPoints = 0, attemptedCredits = 0;
+    var totalCredits = 0, qualityPoints = 0, attemptedCredits = 0, earned = 0;
     state.courses.forEach(function (c) {
       attemptedCredits += Number(c.credit) || 0;
       var r = computeCourse(c);
+      earned += earnedCredits(c, r);
       if (r.gpaPoint !== null && !isNaN(r.gpaPoint)) {
         qualityPoints += r.gpaPoint * (Number(c.credit) || 0);
         totalCredits += Number(c.credit) || 0;
       }
     });
     var cgpa = totalCredits > 0 ? qualityPoints / totalCredits : 0;
-    return { cgpa: cgpa, totalCredits: totalCredits, attemptedCredits: attemptedCredits };
+    return { cgpa: cgpa, totalCredits: totalCredits, attemptedCredits: attemptedCredits, earnedCredits: earned };
+  }
+
+  // Credits that count toward the total: not withdrawn and not failed.
+  function earnedCredits(course, r) {
+    if (course.withdrawn || r.letter === "F" || r.letter === "U") return 0;
+    return Number(course.credit) || 0;
   }
 
   function computeBySemester() {
     var order = [], map = {};
     state.courses.forEach(function (c) {
       var sem = c.semester || "Semester 1";
-      if (!map[sem]) { map[sem] = { name: sem, credits: 0, quality: 0, courses: [] }; order.push(sem); }
+      if (!map[sem]) { map[sem] = { name: sem, gpaCredits: 0, quality: 0, credits: 0, courses: [] }; order.push(sem); }
       map[sem].courses.push(c);
       var r = computeCourse(c);
+      map[sem].credits += earnedCredits(c, r);
       if (r.gpaPoint !== null && !isNaN(r.gpaPoint)) {
         map[sem].quality += r.gpaPoint * (Number(c.credit) || 0);
-        map[sem].credits += Number(c.credit) || 0;
+        map[sem].gpaCredits += Number(c.credit) || 0;
       }
     });
     return order.map(function (name) {
       var g = map[name];
-      return { name: name, gpa: g.credits > 0 ? g.quality / g.credits : 0, courses: g.courses };
+      return {
+        name: name, gpa: g.gpaCredits > 0 ? g.quality / g.gpaCredits : 0,
+        hasGpa: g.gpaCredits > 0, credits: g.credits, courses: g.courses
+      };
     });
+  }
+
+  function semesterMeta(sem) {
+    return (sem.hasGpa ? "GPA " + sem.gpa.toFixed(2) : "GPA —") + " · " + sem.credits + " credits";
   }
 
   // Tells the learner what average they need on the not-yet-graded items to
@@ -207,7 +224,7 @@
   // Points still needed (on this course's own point scale) to reach the next
   // letter grade up, e.g. "6.3 pts to B+". Returns null if not applicable.
   function nextLetterGap(course) {
-    if (course.kind === "satisfactory") return null;
+    if (course.kind === "satisfactory" || course.withdrawn) return null;
     if (!course.scale || !course.scale.length) return null;
     var r = computeCourse(course);
     var sorted = course.scale.slice().sort(function (a, b) { return a.cutoff - b.cutoff; });
@@ -224,6 +241,7 @@
 
   function letterClass(letter) {
     if (!letter) return "grade-none";
+    if (letter === "W") return "grade-w";
     if (letter === "S" || letter === "U") return "grade-s";
     if (letter[0] === "A") return "grade-a";
     if (letter[0] === "B") return "grade-b";
@@ -266,13 +284,13 @@
     var overall = computeOverall();
     renderGauge(overall.cgpa);
 
-    document.getElementById("statCredits").textContent = overall.totalCredits;
+    document.getElementById("statCredits").textContent = overall.earnedCredits;
     document.getElementById("statCourses").textContent = state.courses.length;
 
     var results = state.courses.map(function (c) {
       return { course: c, r: computeCourse(c) };
     });
-    var graded = results.filter(function (x) { return x.course.kind !== "satisfactory" && x.r.hasGrades; });
+    var graded = results.filter(function (x) { return x.course.kind !== "satisfactory" && !x.course.withdrawn && x.r.hasGrades; });
 
     var highestEl = document.getElementById("statHighest");
     var lowestEl = document.getElementById("statLowest");
@@ -295,7 +313,7 @@
       var nameSpan = document.createElement("span");
       nameSpan.textContent = sem.name;
       var gpaSpan = document.createElement("span");
-      gpaSpan.textContent = "GPA " + sem.gpa.toFixed(2);
+      gpaSpan.textContent = semesterMeta(sem);
       head.appendChild(nameSpan);
       head.appendChild(gpaSpan);
       list.appendChild(head);
@@ -303,7 +321,7 @@
       sem.courses.forEach(function (course) {
         var x = { course: course, r: computeCourse(course) };
         var row = document.createElement("div");
-        row.className = "standing-row";
+        row.className = "standing-row" + (course.withdrawn ? " is-withdrawn" : "");
 
       var nameWrap = document.createElement("div");
       var nameEl = document.createElement("div");
@@ -328,12 +346,12 @@
       track.className = "standing-bar-track";
       var barFill = document.createElement("div");
       barFill.className = "standing-bar-fill";
-      barFill.style.width = Math.max(0, Math.min(100, x.r.percent)) + "%";
+      barFill.style.width = (x.course.withdrawn ? 0 : Math.max(0, Math.min(100, x.r.percent))) + "%";
       track.appendChild(barFill);
 
       var pct = document.createElement("div");
       pct.className = "standing-percent";
-      pct.textContent = (x.course.kind === "satisfactory" || !x.r.hasGrades) ? "—" : Math.round(x.r.percent) + "%";
+      pct.textContent = (x.course.kind === "satisfactory" || x.course.withdrawn || !x.r.hasGrades) ? "—" : Math.round(x.r.percent) + "%";
 
       var badge = document.createElement("span");
       badge.className = "badge " + letterClass(x.r.letter);
@@ -357,55 +375,63 @@
     var openIds = Array.prototype.slice.call(wrap.querySelectorAll(".course.is-open")).map(function (n) { return n.dataset.id; });
 
     wrap.innerHTML = "";
-    state.courses.forEach(function (course) {
-      var node = courseTpl.content.firstElementChild.cloneNode(true);
-      node.dataset.id = course.id;
-      if (openIds.indexOf(course.id) !== -1) node.classList.add("is-open");
+    computeBySemester().forEach(function (sem) {
+      var section = buildSemesterSection(sem);
+      var list = section.querySelector(".course-accordion");
+      wrap.appendChild(section);
+      sem.courses.forEach(function (course) {
+        var node = courseTpl.content.firstElementChild.cloneNode(true);
+        node.dataset.id = course.id;
+        if (openIds.indexOf(course.id) !== -1) node.classList.add("is-open");
 
-      var r = computeCourse(course);
+        var r = computeCourse(course);
 
-      node.querySelector(".course-name-input").value = course.name;
-      var badge = node.querySelector(".letter-badge");
-      badge.textContent = r.letter || "—";
-      badge.className = "badge letter-badge " + letterClass(r.letter);
-      node.querySelector(".course-percent").textContent = percentLabel(course, r);
-      node.querySelector(".credit-num").textContent = Number(course.credit) || 0;
+        node.querySelector(".course-name-input").value = course.name;
+        var badge = node.querySelector(".letter-badge");
+        badge.textContent = r.letter || "—";
+        badge.className = "badge letter-badge " + letterClass(r.letter);
+        node.querySelector(".course-percent").textContent = percentLabel(course, r);
+        node.querySelector(".credit-num").textContent = Number(course.credit) || 0;
 
-      node.querySelector(".credit-input").value = course.credit;
-      node.querySelector(".kind-select").value = course.kind;
-      node.querySelector(".semester-input").value = course.semester || "Semester 1";
-      node.querySelector(".whatif-result").textContent = whatIfMessage(course, Number(node.querySelector(".whatif-target").value) || 80);
+        node.querySelector(".credit-input").value = course.credit;
+        node.querySelector(".kind-select").value = course.kind;
+        node.querySelector(".withdrawn-input").checked = !!course.withdrawn;
+        if (course.withdrawn) node.classList.add("is-withdrawn");
+        node.querySelector(".semester-input").value = course.semester || "Semester 1";
+        node.querySelector(".whatif-result").textContent = whatIfMessage(course, Number(node.querySelector(".whatif-target").value) || 80);
 
-      var itemsList = node.querySelector(".items-list");
-      var itemRowTpl = document.getElementById("itemRowTemplate");
-      (course.items || []).forEach(function (item) {
-        var row = itemRowTpl.content.firstElementChild.cloneNode(true);
-        row.dataset.itemId = item.id;
-        row.querySelector(".item-name").value = item.name;
-        row.querySelector(".item-score").value = isGraded(item) ? item.score : "";
-        row.querySelector(".item-full").value = item.full;
-        itemsList.appendChild(row);
+        var itemsList = node.querySelector(".items-list");
+        var itemRowTpl = document.getElementById("itemRowTemplate");
+        (course.items || []).forEach(function (item) {
+          var row = itemRowTpl.content.firstElementChild.cloneNode(true);
+          row.dataset.itemId = item.id;
+          row.querySelector(".item-name").value = item.name;
+          row.querySelector(".item-score").value = isGraded(item) ? item.score : "";
+          row.querySelector(".item-full").value = item.full;
+          itemsList.appendChild(row);
+        });
+        node.querySelector(".total-score").textContent = round2(r.totalScore);
+        node.querySelector(".total-full").textContent = round2(r.totalFull);
+
+        var scaleList = node.querySelector(".scale-list");
+        var scaleRowTpl = document.getElementById("scaleRowTemplate");
+        (course.scale || []).slice().sort(function (a, b) { return a.cutoff - b.cutoff; }).forEach(function (row) {
+          var rowEl = scaleRowTpl.content.firstElementChild.cloneNode(true);
+          rowEl.querySelector(".scale-cutoff").value = row.cutoff;
+          rowEl.querySelector(".scale-letter").value = row.letter;
+          scaleList.appendChild(rowEl);
+        });
+
+        // Hide item/scale editing chrome for satisfactory (pass/fail) courses.
+        if (course.kind === "satisfactory") {
+          node.querySelector(".items-block").style.display = "none";
+          node.querySelector(".scale-block").style.display = "none";
+          node.querySelector(".whatif-block").style.display = "none";
+        }
+        if (course.withdrawn) node.querySelector(".whatif-block").style.display = "none";
+
+        list.appendChild(node);
       });
-      node.querySelector(".total-score").textContent = round2(r.totalScore);
-      node.querySelector(".total-full").textContent = round2(r.totalFull);
-
-      var scaleList = node.querySelector(".scale-list");
-      var scaleRowTpl = document.getElementById("scaleRowTemplate");
-      (course.scale || []).slice().sort(function (a, b) { return a.cutoff - b.cutoff; }).forEach(function (row) {
-        var rowEl = scaleRowTpl.content.firstElementChild.cloneNode(true);
-        rowEl.querySelector(".scale-cutoff").value = row.cutoff;
-        rowEl.querySelector(".scale-letter").value = row.letter;
-        scaleList.appendChild(rowEl);
-      });
-
-      // Hide item/scale editing chrome for satisfactory (pass/fail) courses.
-      if (course.kind === "satisfactory") {
-        node.querySelector(".items-block").style.display = "none";
-        node.querySelector(".scale-block").style.display = "none";
-        node.querySelector(".whatif-block").style.display = "none";
-      }
-
-      wrap.appendChild(node);
     });
 
     var datalist = document.getElementById("semesterOptions");
@@ -418,12 +444,54 @@
   }
 
   function percentLabel(course, r) {
+    if (course.withdrawn) return "Withdrawn";
     if (course.kind === "satisfactory") return "Pass / fail";
     return r.hasGrades ? Math.round(r.percent) + "%" : "No grades yet";
   }
 
   function round2(n) {
     return Math.round((Number(n) || 0) * 100) / 100;
+  }
+
+  function buildSemesterSection(sem) {
+    var section = document.createElement("section");
+    section.className = "semester-section";
+    section.dataset.semester = sem.name;
+
+    var head = document.createElement("div");
+    head.className = "semester-section-head";
+    var nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.className = "semester-name-input";
+    nameInput.value = sem.name;
+    nameInput.setAttribute("aria-label", "Semester name");
+    var meta = document.createElement("span");
+    meta.className = "semester-section-meta";
+    meta.textContent = semesterMeta(sem);
+    var addBtn = document.createElement("button");
+    addBtn.type = "button";
+    addBtn.className = "btn btn-ghost add-course-here-btn";
+    addBtn.textContent = "Add course";
+    head.appendChild(nameInput);
+    head.appendChild(meta);
+    head.appendChild(addBtn);
+
+    var list = document.createElement("div");
+    list.className = "course-accordion";
+    section.appendChild(head);
+    section.appendChild(list);
+    return section;
+  }
+
+  function renameSemester(from, to) {
+    if (to && to !== from) {
+      state.courses.forEach(function (c) {
+        if ((c.semester || "Semester 1") === from) c.semester = to;
+      });
+      saveState();
+    }
+    renderCourses();
+    renderDashboard();
   }
 
   function findCourse(id) {
@@ -516,6 +584,12 @@
     var wrap = document.getElementById("courseAccordion");
 
     wrap.addEventListener("click", function (e) {
+      var addHere = e.target.closest(".add-course-here-btn");
+      if (addHere) {
+        addCourse(addHere.closest(".semester-section").dataset.semester);
+        return;
+      }
+
       var summary = e.target.closest(".course-summary");
       var courseEl = e.target.closest(".course");
       if (!courseEl) return;
@@ -588,6 +662,10 @@
     });
 
     wrap.addEventListener("keydown", function (e) {
+      if (e.target.classList.contains("semester-name-input") && e.key === "Enter") {
+        e.target.blur();
+        return;
+      }
       if (e.target.classList.contains("course-summary") && (e.key === "Enter" || e.key === " ")) {
         e.preventDefault();
         e.target.closest(".course").classList.toggle("is-open");
@@ -611,6 +689,7 @@
         saveState();
         var creditNum = courseEl.querySelector(".credit-num");
         if (creditNum) creditNum.textContent = course.credit;
+        updateCourseLiveTotals(courseEl, course);
         renderDashboard();
         return;
       }
@@ -653,6 +732,11 @@
     });
 
     wrap.addEventListener("change", function (e) {
+      if (e.target.classList.contains("semester-name-input")) {
+        renameSemester(e.target.closest(".semester-section").dataset.semester, e.target.value.trim());
+        return;
+      }
+
       var courseEl = e.target.closest(".course");
       if (!courseEl) return;
       var id = courseEl.dataset.id;
@@ -664,13 +748,29 @@
         reopen(id);
         renderDashboard();
       }
+      if (e.target.classList.contains("withdrawn-input")) {
+        course.withdrawn = e.target.checked;
+        saveState();
+        renderCourses();
+        reopen(id);
+        renderDashboard();
+      }
+      if (e.target.classList.contains("semester-input")) {
+        // Moves the course into its new semester section once typing is done.
+        renderCourses();
+        reopen(id);
+      }
     });
 
     document.getElementById("addCourseBtn").addEventListener("click", function () {
+      addCourse(nextSemesterName());
+    });
+
+    function addCourse(semester) {
       var id = uid();
       state.courses.push({
         id: id, name: "New course", credit: 3, kind: "graded",
-        semester: lastSemester(),
+        semester: semester,
         items: [{ id: uid(), name: "Assignment 1", score: null, full: 100 }],
         scale: [ {cutoff:0,letter:"F"},{cutoff:50,letter:"D"},{cutoff:55,letter:"D+"},{cutoff:60,letter:"C"},{cutoff:65,letter:"C+"},{cutoff:70,letter:"B"},{cutoff:75,letter:"B+"},{cutoff:80,letter:"A"} ]
       });
@@ -680,7 +780,7 @@
       reopen(id);
       var el = wrap.querySelector('.course[data-id="' + id + '"] .course-name-input');
       if (el) { el.focus(); el.select(); }
-    });
+    }
   }
 
   var pendingUndo = null, toastTimer2 = null;
@@ -696,9 +796,11 @@
     }, 6000);
   }
 
-  function lastSemester() {
-    var last = state.courses[state.courses.length - 1];
-    return (last && last.semester) || "Semester 1";
+  function nextSemesterName() {
+    var names = computeBySemester().map(function (s) { return s.name; });
+    var n = names.length + 1;
+    while (names.indexOf("Semester " + n) !== -1) n++;
+    return "Semester " + n;
   }
 
   function reopen(id) {
@@ -730,6 +832,12 @@
     var targetInput = courseEl.querySelector(".whatif-target");
     var whatifOut = courseEl.querySelector(".whatif-result");
     if (targetInput && whatifOut) whatifOut.textContent = whatIfMessage(course, Number(targetInput.value) || 80);
+
+    var section = courseEl.closest(".semester-section");
+    if (section) {
+      var sem = computeBySemester().filter(function (s) { return s.name === section.dataset.semester; })[0];
+      if (sem) section.querySelector(".semester-section-meta").textContent = semesterMeta(sem);
+    }
   }
   function updateCourseLiveBadge(courseEl, course) {
     updateCourseLiveTotals(courseEl, course);
