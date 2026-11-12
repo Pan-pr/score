@@ -84,7 +84,7 @@
 
         <div class="section-head">
           <h2>Course standing</h2>
-          <p>Live percentage and letter grade for every course, in credit order.</p>
+          <p>Live percentage and letter grade for every course, grouped by semester.</p>
         </div>
 
         <div class="standing-list" id="standingList"></div>
@@ -96,12 +96,12 @@
         <div class="section-head with-action">
           <div>
             <h2>Courses</h2>
-            <p>Edit scores, credits, and grading scales. Everything saves as you type.</p>
+            <p>Edit scores, credits, and grading scales. Click a semester's name to rename it. Everything saves as you type.</p>
           </div>
-          <button class="btn btn-primary" id="addCourseBtn">Add course</button>
+          <button class="btn btn-primary" id="addCourseBtn">Add semester</button>
         </div>
 
-        <div class="course-accordion" id="courseAccordion"></div>
+        <div class="semester-list" id="courseAccordion"></div>
       </section>
 
       <!-- Settings -->
@@ -159,6 +159,10 @@
               <option value="graded">Graded</option>
               <option value="satisfactory">Satisfactory / Ungraded</option>
             </select>
+          </label>
+          <label class="field field-check">
+            <input type="checkbox" class="withdrawn-input">
+            <span>Withdrawn (W)</span>
           </label>
           <button class="btn btn-ghost delete-course-btn" type="button">Remove course</button>
         </div>
