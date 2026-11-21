@@ -147,7 +147,15 @@
       c.credit = Number(c.credit) || 0;
       if (!Array.isArray(c.items)) c.items = [];
       if (!Array.isArray(c.scale)) c.scale = [];
-      c.items.forEach(function (it) { if (!it.id) it.id = uid(); });
+      c.items.forEach(function (it) {
+        if (!it.id) it.id = uid();
+        if (!Array.isArray(it.retests)) it.retests = [];
+        it.retests.forEach(function (rt) {
+          if (!rt.id) rt.id = uid();
+          if (rt.score === "" || rt.score === undefined) rt.score = null;
+        });
+        if (RETEST_RULES.indexOf(it.rule) === -1) it.rule = "best";
+      });
     });
     if (!s.terms) {
       s.terms = [];
@@ -205,7 +213,7 @@
       var full = Number(it.full) || 0;
       totalFull += full;
       if (isGraded(it)) {
-        totalScore += Number(it.score) || 0;
+        totalScore += effectiveScore(it);
         gradedFull += full;
       }
     });
@@ -244,8 +252,46 @@
       .sort(function (a, b) { return a.cutoff - b.cutoff; });
   }
 
+  function hasValue(v) {
+    return v !== null && v !== undefined && v !== "" && !isNaN(Number(v));
+  }
+
+  /* -------------------------------------------------------
+     Retests. An item's first attempt is item.score; each retest is
+     appended to item.retests. item.rule picks which attempt counts:
+     "best" (highest), "latest" (most recent graded) or "average".
+  ------------------------------------------------------- */
+  var RETEST_RULES = ["best", "latest", "average"];
+  var RULE_NAMES = { best: "Highest", latest: "Latest", average: "Average" };
+
+  // Graded attempts in order, as { index, score }; index 0 is the original.
+  function attemptsOf(item) {
+    var all = [item.score].concat((item.retests || []).map(function (r) { return r.score; }));
+    var out = [];
+    all.forEach(function (v, i) { if (hasValue(v)) out.push({ index: i, score: Number(v) }); });
+    return out;
+  }
+
+  // Index of the attempt that counts, or -1 when the rule blends them.
+  function countedAttempt(item) {
+    var a = attemptsOf(item);
+    if (!a.length || item.rule === "average") return -1;
+    if (item.rule === "latest") return a[a.length - 1].index;
+    return a.reduce(function (m, x) { return x.score > m.score ? x : m; }).index;
+  }
+
+  function effectiveScore(item) {
+    var a = attemptsOf(item);
+    if (!a.length) return null;
+    if (item.rule === "average") {
+      return a.reduce(function (sum, x) { return sum + x.score; }, 0) / a.length;
+    }
+    var idx = countedAttempt(item);
+    return a.filter(function (x) { return x.index === idx; })[0].score;
+  }
+
   function isGraded(item) {
-    return item.score !== null && item.score !== undefined && item.score !== "";
+    return effectiveScore(item) !== null;
   }
 
   function computeOverall() {
@@ -371,30 +417,17 @@
   }
 
   /* -------------------------------------------------------
-     Gauge (SVG arc, 0–4.0 scale, 240° sweep)
+     GPA ring (0–4.0 scale, full circle)
   ------------------------------------------------------- */
-  function polar(cx, cy, r, angleDeg) {
-    var a = ((angleDeg - 90) * Math.PI) / 180;
-    return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
-  }
-  function arcPath(cx, cy, r, startAngle, endAngle) {
-    var start = polar(cx, cy, r, endAngle);
-    var end = polar(cx, cy, r, startAngle);
-    var largeArc = endAngle - startAngle <= 180 ? 0 : 1;
-    return "M " + start.x + " " + start.y + " A " + r + " " + r + " 0 " + largeArc + " 0 " + end.x + " " + end.y;
+  function renderGauge(cgpa, hasGpa) {
+    var fill = $("gaugeFill");
+    var circumference = 2 * Math.PI * Number(fill.getAttribute("r"));
+    var clamped = Math.max(0, Math.min(4, cgpa));
+    fill.style.strokeDasharray = circumference;
+    fill.style.strokeDashoffset = circumference * (1 - (hasGpa ? clamped / 4 : 0));
+    $("cgpaValue").textContent = hasGpa ? clamped.toFixed(2) : "—";
   }
 
-  function renderGauge(cgpa, hasGpa) {
-    var cx = 110, cy = 118, r = 92;
-    var startAngle = -120, endAngle = 120;
-    var track = document.getElementById("gaugeTrack");
-    var fill = document.getElementById("gaugeFill");
-    track.setAttribute("d", arcPath(cx, cy, r, startAngle, endAngle));
-    var clamped = Math.max(0, Math.min(4, cgpa));
-    var sweep = startAngle + (clamped / 4) * (endAngle - startAngle);
-    fill.setAttribute("d", arcPath(cx, cy, r, startAngle, sweep));
-    document.getElementById("cgpaValue").textContent = hasGpa ? clamped.toFixed(2) : "—";
-  }
 
 
   /* -------------------------------------------------------
@@ -417,6 +450,10 @@
     var btn = el("button", "btn btn-ghost " + className, text);
     btn.type = "button";
     return btn;
+  }
+
+  function findItem(course, itemId) {
+    return (course.items || []).filter(function (it) { return it.id === itemId; })[0];
   }
 
   function findCourse(id) {
@@ -463,7 +500,7 @@
   function renderDashboard() {
     var overall = computeOverall();
     renderGauge(overall.cgpa, overall.hasGpa);
-    $("gaugeFill").style.display = overall.hasGpa && overall.cgpa > 0 ? "" : "none";
+    $("gaugeFill").style.visibility = overall.hasGpa && overall.cgpa > 0 ? "" : "hidden";
 
     var required = state.creditsRequired;
     setStat("statCredits", String(overall.earnedCredits),
@@ -529,7 +566,7 @@
   // A row is a button: selecting it opens that course on the Courses page.
   function buildStandingRow(course) {
     var r = computeCourse(course);
-    var row = el("button", "standing-row" + (course.withdrawn ? " is-withdrawn" : ""));
+    var row = el("button", "standing-row " + letterClass(r.letter) + (course.withdrawn ? " is-withdrawn" : ""));
     row.type = "button";
     row.dataset.id = course.id;
     row.title = "Edit " + courseTitle(course);
@@ -658,12 +695,7 @@
     var itemsList = node.querySelector(".items-list");
     var itemRowTpl = $("itemRowTemplate");
     (course.items || []).forEach(function (item) {
-      var row = itemRowTpl.content.firstElementChild.cloneNode(true);
-      row.dataset.itemId = item.id;
-      row.querySelector(".item-name").value = item.name;
-      row.querySelector(".item-score").value = isGraded(item) ? item.score : "";
-      row.querySelector(".item-full").value = item.full || "";
-      itemsList.appendChild(row);
+      itemsList.appendChild(buildItemNode(item, itemRowTpl));
     });
 
     var scaleList = node.querySelector(".scale-list");
@@ -676,6 +708,29 @@
     });
 
     updateCourseLive(node, course);
+    return node;
+  }
+
+  function buildItemNode(item, itemRowTpl) {
+    var node = itemRowTpl.content.firstElementChild.cloneNode(true);
+    node.dataset.itemId = item.id;
+    node.querySelector(".item-name").value = item.name;
+    node.querySelector(".item-score").value = hasValue(item.score) ? item.score : "";
+    node.querySelector(".item-full").value = item.full || "";
+
+    if (item.retests.length) {
+      node.classList.add("has-retests");
+      var list = node.querySelector(".retests");
+      var rowTpl = $("retestRowTemplate");
+      item.retests.forEach(function (rt, i) {
+        var row = rowTpl.content.firstElementChild.cloneNode(true);
+        row.dataset.retestId = rt.id;
+        row.querySelector(".retest-label").textContent = item.retests.length > 1 ? "Retest " + (i + 1) : "Retest";
+        row.querySelector(".retest-score").value = hasValue(rt.score) ? rt.score : "";
+        list.appendChild(row);
+      });
+      list.appendChild($("retestRuleTemplate").content.firstElementChild.cloneNode(true));
+    }
     return node;
   }
 
@@ -746,11 +801,33 @@
     courseEl.querySelector(".scale-summary").textContent = scaleSummary(course);
     courseEl.querySelector(".whatif-result").textContent = whatIfMessage(course, targetOf(course));
 
-    Array.prototype.forEach.call(courseEl.querySelectorAll(".items-list .items-row"), function (row) {
-      var score = row.querySelector(".item-score"), full = row.querySelector(".item-full");
-      var over = score.value !== "" && Number(score.value) > (Number(full.value) || 0);
-      score.classList.toggle("is-over", over);
-      score.title = over ? "Score is higher than the maximum" : "Leave blank if not graded yet";
+    Array.prototype.forEach.call(courseEl.querySelectorAll(".items-list .item"), function (node) {
+      var item = findItem(course, node.dataset.itemId);
+      if (!item) return;
+      var max = Number(item.full) || 0;
+      var counted = item.retests.length ? countedAttempt(item) : -1;
+      var inputs = [node.querySelector(".item-score")].concat(
+        Array.prototype.slice.call(node.querySelectorAll(".retest-score")));
+      inputs.forEach(function (input, i) {
+        var over = input.value !== "" && Number(input.value) > max;
+        input.classList.toggle("is-over", over);
+        // With retests, dim the attempts that don't count toward the total.
+        input.classList.toggle("is-superseded", counted !== -1 && input.value !== "" && i !== counted);
+        input.title = over ? "Score is higher than the maximum" : "Leave blank if not graded yet";
+      });
+      node.querySelectorAll(".retest-of").forEach(function (span) {
+        span.textContent = "of " + round2(max);
+      });
+      var rule = node.querySelector(".retest-rule");
+      if (rule) {
+        rule.querySelectorAll(".segment").forEach(function (b) {
+          var on = b.dataset.rule === item.rule;
+          b.classList.toggle("is-active", on);
+          b.setAttribute("aria-pressed", on ? "true" : "false");
+        });
+        var eff = effectiveScore(item);
+        rule.querySelector(".retest-counted").textContent = eff === null ? "—" : String(round2(eff));
+      }
     });
   }
 
@@ -812,7 +889,7 @@
      Navigation — the page lives in the URL hash, so reloading
      or using Back keeps you where you were.
   ------------------------------------------------------- */
-  var PAGES = { dashboard: "Dashboard", courses: "Courses", settings: "Settings" };
+  var PAGES = { dashboard: "Summary", courses: "Courses", settings: "Settings" };
 
   function currentPage() {
     var page = location.hash.replace("#", "");
@@ -831,18 +908,11 @@
     $("pageTitle").textContent = PAGES[page];
     $("addCourseBtn").hidden = page !== "courses";
     if (page === "settings") renderGpaScale();
-    closeMenu();
   }
 
   function go(page) {
     if (currentPage() === page) { showPage(page); return; }
     location.hash = page; // triggers hashchange → showPage
-  }
-
-  function closeMenu() {
-    $("sidebar").classList.remove("is-open");
-    $("scrim").classList.remove("is-visible");
-    $("menuBtn").setAttribute("aria-expanded", "false");
   }
 
   function setupNav() {
@@ -853,14 +923,6 @@
       showPage(currentPage());
       window.scrollTo(0, 0);
     });
-
-    $("menuBtn").addEventListener("click", function () {
-      var open = $("sidebar").classList.toggle("is-open");
-      $("scrim").classList.toggle("is-visible", open);
-      $("menuBtn").setAttribute("aria-expanded", open ? "true" : "false");
-    });
-    $("scrim").addEventListener("click", closeMenu);
-    document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeMenu(); });
 
     $("standingList").addEventListener("click", function (e) {
       var row = e.target.closest(".standing-row");
@@ -898,27 +960,40 @@
   /* -------------------------------------------------------
      Theme
   ------------------------------------------------------- */
+  // "auto" follows the system setting, like an Apple app; the choice lives
+  // in Settings → Appearance.
   function setupTheme() {
     var THEME_KEY = "ledger-theme";
-    var saved = null;
-    try { saved = localStorage.getItem(THEME_KEY); } catch (e) { /* ignore */ }
-    var prefersLight = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches;
-    var theme = saved === "light" || saved === "dark" ? saved : (prefersLight ? "light" : "dark");
-    applyTheme(theme);
+    var choice = "auto";
+    try { choice = localStorage.getItem(THEME_KEY) || "auto"; } catch (e) { /* ignore */ }
+    if (["auto", "light", "dark"].indexOf(choice) === -1) choice = "auto";
+    var media = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
 
-    $("themeToggle").addEventListener("click", function () {
-      theme = theme === "dark" ? "light" : "dark";
-      applyTheme(theme);
-      try { localStorage.setItem(THEME_KEY, theme); } catch (e) { /* ignore */ }
-    });
-
-    function applyTheme(t) {
+    function apply() {
+      var t = choice === "auto" ? (media && media.matches ? "dark" : "light") : choice;
       document.body.setAttribute("data-theme", t);
-      $("themeToggleLabel").textContent = t === "dark" ? "Dark mode" : "Light mode";
-      $("themeToggle").setAttribute("aria-pressed", t === "dark" ? "true" : "false");
       var meta = document.querySelector('meta[name="theme-color"]');
-      if (meta) meta.setAttribute("content", t === "dark" ? "#171310" : "#EFEBE2");
+      if (meta) meta.setAttribute("content", t === "dark" ? "#000000" : "#F2F2F7");
+      document.querySelectorAll("#appearanceControl .segment").forEach(function (b) {
+        var on = b.dataset.theme === choice;
+        b.classList.toggle("is-active", on);
+        b.setAttribute("aria-pressed", on ? "true" : "false");
+      });
     }
+
+    if (media) {
+      var onChange = function () { if (choice === "auto") apply(); };
+      if (media.addEventListener) media.addEventListener("change", onChange);
+      else if (media.addListener) media.addListener(onChange);
+    }
+    $("appearanceControl").addEventListener("click", function (e) {
+      var b = e.target.closest(".segment");
+      if (!b) return;
+      choice = b.dataset.theme;
+      try { localStorage.setItem(THEME_KEY, choice); } catch (err) { /* ignore */ }
+      apply();
+    });
+    apply();
   }
 
   /* -------------------------------------------------------
@@ -996,15 +1071,42 @@
       }
 
       if (e.target.closest(".add-item-btn")) {
-        course.items.push({ id: uid(), name: "", score: null, full: 0 });
+        course.items.push({ id: uid(), name: "", score: null, full: 0, retests: [], rule: "best" });
         rerender();
         focusIn(id, ".items-list .item-name");
         return;
       }
 
-      if (e.target.closest(".row-remove") && e.target.closest(".items-list")) {
-        var itemId = e.target.closest(".items-row").dataset.itemId;
-        var removedItem = course.items.filter(function (it) { return it.id === itemId; })[0];
+      var itemNode = e.target.closest(".item");
+      var target = itemNode ? findItem(course, itemNode.dataset.itemId) : null;
+
+      if (target && e.target.closest(".retest-add-btn")) {
+        target.retests.push({ id: uid(), score: null });
+        rerender();
+        focusIn(id, '.item[data-item-id="' + target.id + '"] .retest-score');
+        return;
+      }
+
+      if (target && e.target.closest(".retest-remove")) {
+        var rtId = e.target.closest(".retest-row").dataset.retestId;
+        target.retests = target.retests.filter(function (rt) { return rt.id !== rtId; });
+        rerender();
+        return;
+      }
+
+      var segment = e.target.closest(".retest-rule .segment");
+      if (target && segment) {
+        target.rule = segment.dataset.rule;
+        saveState();
+        updateCourseLive(courseEl, course);
+        updateSectionMeta();
+        renderDashboard();
+        return;
+      }
+
+      if (e.target.closest(".item-remove")) {
+        var itemId = itemNode.dataset.itemId;
+        var removedItem = findItem(course, itemId);
         if (!removedItem) return;
         var iIdx = course.items.indexOf(removedItem);
         course.items.splice(iIdx, 1);
@@ -1047,9 +1149,15 @@
         course.credit = Math.max(0, Number(e.target.value) || 0);
       } else if (cl.contains("whatif-target")) {
         course.target = Number(e.target.value) || 0;
+      } else if (cl.contains("retest-score")) {
+        var owner = findItem(course, e.target.closest(".item").dataset.itemId);
+        var retest = owner && owner.retests.filter(function (rt) {
+          return rt.id === e.target.closest(".retest-row").dataset.retestId;
+        })[0];
+        if (!retest) return;
+        retest.score = e.target.value === "" ? null : Number(e.target.value) || 0;
       } else if (cl.contains("item-name") || cl.contains("item-score") || cl.contains("item-full")) {
-        var row = e.target.closest(".items-row");
-        var item = course.items.filter(function (it) { return it.id === row.dataset.itemId; })[0];
+        var item = findItem(course, e.target.closest(".item").dataset.itemId);
         if (!item) return;
         if (cl.contains("item-name")) item.name = e.target.value;
         if (cl.contains("item-score")) item.score = e.target.value === "" ? null : Number(e.target.value) || 0;
@@ -1117,7 +1225,10 @@
       state.courses.push({
         id: id, name: "", credit: 3, kind: "graded",
         termId: termIdValue,
-        items: [{ id: uid(), name: "Midterm", score: null, full: 50 }, { id: uid(), name: "Final", score: null, full: 50 }],
+        items: [
+          { id: uid(), name: "Midterm", score: null, full: 50, retests: [], rule: "best" },
+          { id: uid(), name: "Final", score: null, full: 50, retests: [], rule: "best" }
+        ],
         scale: JSON.parse(JSON.stringify(DEFAULT_SCALE))
       });
       saveState();

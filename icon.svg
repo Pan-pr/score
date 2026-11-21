@@ -1,4 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
-  <rect width="128" height="128" rx="20" fill="#171310"/>
-  <text x="64" y="86" font-family="Georgia, 'Fraunces', serif" font-size="72" fill="#C9A66B" text-anchor="middle">§</text>
+  <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3D9BFF"/><stop offset="1" stop-color="#0066D6"/></linearGradient></defs>
+  <rect width="128" height="128" rx="28" fill="url(#g)"/>
+  <text x="64" y="88" font-family="-apple-system, 'SF Pro Display', Helvetica, Arial, sans-serif" font-size="70" font-weight="600" fill="#fff" text-anchor="middle">§</text>
 </svg>
