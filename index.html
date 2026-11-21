@@ -2,21 +2,24 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="apple-touch-icon" href="icon.svg">
 <title>Ledger — Grade Dashboard</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#171310">
+<meta name="theme-color" content="#F2F2F7">
 </head>
-<body data-theme="dark">
+<body data-theme="light">
 
   <div class="app">
 
-    <!-- Sidebar -->
+    <!-- Sidebar on wide screens, tab bar on phones -->
     <aside class="sidebar" id="sidebar">
       <div class="brand">
         <span class="brand-mark" aria-hidden="true">§</span>
@@ -24,28 +27,26 @@
       </div>
 
       <nav class="nav" aria-label="Pages">
-        <button class="nav-item" type="button" data-page="dashboard">Dashboard</button>
-        <button class="nav-item" type="button" data-page="courses">Courses</button>
-        <button class="nav-item" type="button" data-page="settings">Settings</button>
-      </nav>
-
-      <div class="sidebar-foot">
-        <button class="theme-toggle" type="button" id="themeToggle" aria-label="Dark mode">
-          <span class="theme-toggle-dot"></span>
+        <button class="nav-item" type="button" data-page="dashboard">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8.25" stroke="currentColor" stroke-width="1.8"/><path d="M12 3.75a8.25 8.25 0 0 1 8.25 8.25" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg>
+          <span>Summary</span>
         </button>
-        <span class="theme-toggle-label" id="themeToggleLabel">Dark mode</span>
-      </div>
+        <button class="nav-item" type="button" data-page="courses">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="3.75" width="16" height="16.5" rx="3" stroke="currentColor" stroke-width="1.8"/><path d="M8 8.5h8M8 12h8M8 15.5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <span>Courses</span>
+        </button>
+        <button class="nav-item" type="button" data-page="settings">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="15" cy="7" r="2.25" stroke="currentColor" stroke-width="1.8"/><circle cx="9" cy="17" r="2.25" stroke="currentColor" stroke-width="1.8"/></svg>
+          <span>Settings</span>
+        </button>
+      </nav>
     </aside>
-    <div class="scrim" id="scrim"></div>
 
     <!-- Main -->
     <div class="main">
 
       <header class="topbar">
-        <button class="menu-btn" type="button" id="menuBtn" aria-label="Menu" aria-expanded="false" aria-controls="sidebar">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M2 5h16M2 10h16M2 15h16" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-        </button>
-        <h1 class="page-title" id="pageTitle">Dashboard</h1>
+        <h1 class="page-title" id="pageTitle">Summary</h1>
         <button class="btn btn-primary" type="button" id="addCourseBtn" hidden>Add course</button>
       </header>
 
@@ -54,13 +55,13 @@
 
         <div class="hero">
           <div class="hero-gauge">
-            <svg viewBox="0 0 220 140" class="gauge-svg" id="gaugeSvg" aria-hidden="true">
-              <path id="gaugeTrack" d="" fill="none" stroke-linecap="round"/>
-              <path id="gaugeFill" d="" fill="none" stroke-linecap="round"/>
+            <svg viewBox="0 0 200 200" class="gauge-svg" aria-hidden="true">
+              <circle id="gaugeTrack" cx="100" cy="100" r="84" fill="none"/>
+              <circle id="gaugeFill" cx="100" cy="100" r="84" fill="none" stroke-linecap="round" transform="rotate(-90 100 100)"/>
             </svg>
             <div class="gauge-readout">
               <span class="gauge-value" id="cgpaValue">—</span>
-              <span class="gauge-label">Cumulative GPA (GPAX)</span>
+              <span class="gauge-label">GPAX</span>
             </div>
           </div>
 
@@ -106,6 +107,17 @@
 
       <!-- Settings -->
       <section class="page" id="page-settings">
+        <div class="settings-group">
+          <div class="section-head">
+            <h2>Appearance</h2>
+          </div>
+          <div class="segmented" id="appearanceControl" role="group" aria-label="Appearance">
+            <button class="segment" type="button" data-theme="auto">Automatic</button>
+            <button class="segment" type="button" data-theme="light">Light</button>
+            <button class="segment" type="button" data-theme="dark">Dark</button>
+          </div>
+        </div>
+
         <div class="settings-group">
           <div class="section-head">
             <h2>Grade point scale</h2>
@@ -176,8 +188,8 @@
             </select>
           </label>
           <label class="field field-check">
-            <input type="checkbox" class="withdrawn-input">
             <span>Withdrawn (W)</span>
+            <input type="checkbox" class="withdrawn-input switch" role="switch">
           </label>
         </div>
 
@@ -189,12 +201,14 @@
               <span>Score</span>
               <span>Out of</span>
               <span></span>
+              <span></span>
             </div>
             <div class="items-list"></div>
             <div class="items-row items-total">
               <span><span class="total-label">Total</span> <span class="total-note"></span></span>
               <span class="total-score">0</span>
               <span class="total-full">0</span>
+              <span></span>
               <span></span>
             </div>
             <button class="btn btn-ghost add-item-btn" type="button">Add item</button>
@@ -235,13 +249,44 @@
     </article>
   </template>
 
-  <!-- Item row template -->
+  <!-- Item template: the item row, then any retests under it -->
   <template id="itemRowTemplate">
-    <div class="items-row">
-      <input type="text" class="item-name" placeholder="Item name" aria-label="Item name">
-      <input type="number" class="item-score" step="any" inputmode="decimal" placeholder="—" aria-label="Score" title="Leave blank if not graded yet">
-      <input type="number" class="item-full" step="any" min="0" inputmode="decimal" placeholder="0" aria-label="Out of">
-      <button class="row-remove" type="button" aria-label="Remove item"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button>
+    <div class="item">
+      <div class="items-row">
+        <input type="text" class="item-name" placeholder="Item name" aria-label="Item name">
+        <input type="number" class="item-score" step="any" inputmode="decimal" placeholder="—" aria-label="Score" title="Leave blank if not graded yet">
+        <input type="number" class="item-full" step="any" min="0" inputmode="decimal" placeholder="0" aria-label="Out of">
+        <button class="row-icon retest-add-btn" type="button" aria-label="Add retest" title="Add retest"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3.2 7.2A5 5 0 1 1 4.6 11.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M2.6 3.8v3.6h3.6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button class="row-remove item-remove" type="button" aria-label="Remove item"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button>
+      </div>
+      <div class="retests"></div>
+    </div>
+  </template>
+
+  <template id="retestRowTemplate">
+    <div class="items-row retest-row">
+      <span class="retest-label">Retest</span>
+      <input type="number" class="retest-score" step="any" inputmode="decimal" placeholder="—" aria-label="Retest score">
+      <span class="retest-of"></span>
+      <span></span>
+      <button class="row-remove retest-remove" type="button" aria-label="Remove retest"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button>
+    </div>
+  </template>
+
+  <template id="retestRuleTemplate">
+    <div class="items-row retest-rule">
+      <span class="retest-rule-main">
+        <span class="retest-rule-label">Counts</span>
+        <span class="segmented segmented-sm" role="group" aria-label="Which attempt counts">
+          <button class="segment" type="button" data-rule="best">Highest</button>
+          <button class="segment" type="button" data-rule="latest">Latest</button>
+          <button class="segment" type="button" data-rule="average">Average</button>
+        </span>
+      </span>
+      <span class="retest-counted">—</span>
+      <span></span>
+      <span></span>
+      <span></span>
     </div>
   </template>
 

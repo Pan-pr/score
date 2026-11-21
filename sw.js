@@ -1,4 +1,4 @@
-var CACHE = "ledger-v6";
+var CACHE = "ledger-v7";
 var ASSETS = ["./", "./index.html", "./css/style.css", "./js/app.js", "./manifest.json", "./icon.svg"];
 
 self.addEventListener("install", function (e) {
